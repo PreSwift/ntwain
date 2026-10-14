@@ -1,4 +1,4 @@
-﻿using NTwain;
+using NTwain;
 using NTwain.Data;
 using System;
 using System.Collections;
@@ -10,7 +10,7 @@ namespace Sample.WPF
     /// <summary>
     /// Wraps a capability as a view model.
     /// </summary>
-    class CapVM
+    class CapVM : GalaSoft.MvvmLight.ViewModelBase
     {
         DataSource _ds;
         object _wrapper;
@@ -23,39 +23,32 @@ namespace Sample.WPF
         {
             _ds = ds;
             Cap = cap;
+        }
 
+        bool _wrapperInitialized;
 
-            var capName = cap.ToString();
-            var wrapProperty = ds.Capabilities.GetType().GetProperty(capName);
+        // Wrapper construction itself queries the driver.
+        void EnsureWrapper()
+        {
+            if (_wrapperInitialized)
+                return;
+            var capName = Cap.ToString();
+            var wrapProperty = _ds.Capabilities.GetType().GetProperty(capName);
             if (wrapProperty != null)
             {
-                _wrapper = wrapProperty.GetGetMethod().Invoke(ds.Capabilities, null);
+                _wrapper = wrapProperty.GetGetMethod().Invoke(_ds.Capabilities, null);
                 var wrapperType = _wrapper.GetType();
                 _getMethod = wrapperType.GetMethod("GetValues");
                 _getCurrentMethod = wrapperType.GetMethod("GetCurrent");
                 _setMethod = wrapperType.GetMethods().FirstOrDefault(m => m.Name == "SetValue");
                 _resetMethod = wrapperType.GetMethods().FirstOrDefault(m => m.Name == "Reset");
             }
-
-            var supportTest = ds.Capabilities.QuerySupport(cap);
-            if (supportTest.HasValue)
-            {
-                Supports = supportTest.Value;
-            }
-            else
-            {
-                if (_wrapper != null)
-                {
-                    var wrapperType = _wrapper.GetType();
-                    QuerySupports? supports = (QuerySupports?)wrapperType.GetProperty("SupportedActions").GetGetMethod().Invoke(_wrapper, null);
-                    Supports = supports.GetValueOrDefault();
-                }
-            }
-
+            _wrapperInitialized = true;
         }
 
         public IEnumerable Get()
         {
+            EnsureWrapper();
             if (_getMethod == null)
             {
                 return _ds.Capabilities.GetValues(Cap);
@@ -64,6 +57,7 @@ namespace Sample.WPF
         }
         public object GetCurrent()
         {
+            EnsureWrapper();
             if (_getMethod == null)
             {
                 return _ds.Capabilities.GetCurrent(Cap);
@@ -72,6 +66,7 @@ namespace Sample.WPF
         }
         public void Set(object value)
         {
+            EnsureWrapper();
             if (_setMethod != null && value != null)
             {
                 _setMethod.Invoke(_wrapper, new object[] { value });
@@ -92,6 +87,7 @@ namespace Sample.WPF
 
         public void Reset()
         {
+            EnsureWrapper();
             if (_resetMethod != null)
             {
                 _resetMethod.Invoke(_wrapper, null);
@@ -112,7 +108,41 @@ namespace Sample.WPF
             }
         }
 
-        public QuerySupports Supports { get; private set; }
+        QuerySupports? _supports;
+
+        // Rendering the list must never query every capability in the driver.
+        public string SupportsDisplay { get { return _supports.HasValue ? _supports.Value.ToString() : "选中后读取"; } }
+
+        public QuerySupports Supports
+        {
+            get
+            {
+                if (!_supports.HasValue)
+                {
+                    if (!_ds.IsOpen)
+                        return default(QuerySupports);
+                    var supportTest = _ds.Capabilities.QuerySupport(Cap);
+                    if (supportTest.HasValue)
+                    {
+                        _supports = supportTest.Value;
+                    }
+                    else
+                    {
+                        EnsureWrapper();
+                        if (_wrapper != null)
+                        {
+                            var wrapperType = _wrapper.GetType();
+                            QuerySupports? supports = (QuerySupports?)wrapperType.GetProperty("SupportedActions").GetGetMethod().Invoke(_wrapper, null);
+                            _supports = supports.GetValueOrDefault();
+                        }
+                    }
+                    if (!_supports.HasValue)
+                        _supports = default(QuerySupports);
+                    RaisePropertyChanged(() => SupportsDisplay);
+                }
+                return _supports.Value;
+            }
+        }
 
         public override string ToString()
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -135,14 +135,8 @@ namespace NTwain.Data
                 case ItemType.Fix32:
                     TWFix32 f32 = (TWFix32)value;
                     Marshal.WriteInt16(baseAddr, offset, f32.Whole);
-                    if (f32.Fraction > Int16.MaxValue)
-                    {
-                        Marshal.WriteInt16(baseAddr, offset + 2, (Int16)(f32.Fraction - 32768));
-                    }
-                    else
-                    {
-                        Marshal.WriteInt16(baseAddr, offset + 2, (Int16)f32.Fraction);
-                    }
+                    // Preserve all 16 fractional bits when writing through the signed API.
+                    Marshal.WriteInt16(baseAddr, offset + 2, unchecked((short)f32.Fraction));
                     break;
                 case ItemType.Frame:
                     TWFrame frame = (TWFrame)value;

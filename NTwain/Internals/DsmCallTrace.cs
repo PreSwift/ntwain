@@ -93,13 +93,16 @@ namespace NTwain.Internals
                             FileAccess.Write,
                             FileShare.ReadWrite,
                             256,
-                            FileOptions.WriteThrough);
+                            FileOptions.None);
                     }
 
                     _stream.Position = 0;
                     _stream.Write(bytes, 0, bytes.Length);
                     _stream.SetLength(bytes.Length);
-                    _stream.Flush(true);
+                    // Flush the managed buffer so a process crash leaves the last call
+                    // visible to the OS. A separate disk-cache flush on every triplet
+                    // adds substantial latency to scanner setup.
+                    _stream.Flush();
                 }
             }
             catch

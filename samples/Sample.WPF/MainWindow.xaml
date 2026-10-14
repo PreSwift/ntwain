@@ -46,9 +46,9 @@
 
         <StackPanel Orientation="Horizontal" Grid.Column="1">
             <Label Content="Caps" Grid.Column="1"></Label>
-            <Button Content="Save Reported" Command="{Binding SaveCapValuesCommand}" DataContext="{Binding SelectedSource}"></Button>
+            <Button Content="Save Reported" Command="{Binding SelectedSource.SaveCapValuesCommand}"></Button>
         </StackPanel>
-        <TextBox Text="{Binding CapFilter, UpdateSourceTrigger=PropertyChanged}" DataContext="{Binding SelectedSource}"
+        <TextBox Text="{Binding SelectedSource.CapFilter, UpdateSourceTrigger=PropertyChanged}"
                  Grid.Column="1" Grid.Row="1"
                  modern:TextBoxUI.WatermarkText="Find cap name"></TextBox>
         <ListBox x:Name="CapList" Grid.Row="2" Grid.Column="1" Width="150"
@@ -60,7 +60,7 @@
                 <DataTemplate>
                     <StackPanel>
                         <TextBlock Text="{Binding Name}" ></TextBlock>
-                        <TextBlock Text="{Binding Supports}" TextWrapping="Wrap" Foreground="{DynamicResource ModernForeground2}"
+                        <TextBlock Text="{Binding SupportsDisplay}" TextWrapping="Wrap" Foreground="{DynamicResource ModernForeground2}"
                                    FontStyle="Italic"/>
                     </StackPanel>
                 </DataTemplate>

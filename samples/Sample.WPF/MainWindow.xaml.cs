@@ -94,8 +94,9 @@ namespace Sample.WPF
             var capVM = CapList.SelectedItem as CapVM;
             if (capVM != null)
             {
-                CapDetailList.ItemsSource = capVM.Get();
-                CapDetailList.SelectedItem = capVM.GetCurrent();
+                var supports = capVM.Supports;
+                CapDetailList.ItemsSource = supports.HasFlag(QuerySupports.Get) ? capVM.Get() : null;
+                CapDetailList.SelectedItem = supports.HasFlag(QuerySupports.GetCurrent) ? capVM.GetCurrent() : null;
             }
             else
             {

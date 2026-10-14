@@ -138,7 +138,7 @@ namespace Sample.WPF
                     FileAccess.Write,
                     FileShare.ReadWrite,
                     4096,
-                    FileOptions.WriteThrough);
+                    FileOptions.None);
                 _writer = new StreamWriter(_stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
                 {
                     AutoFlush = true
@@ -376,8 +376,6 @@ namespace Sample.WPF
                         return;
                     _writer.WriteLine(line);
                     _writer.Flush();
-                    if (_stream != null)
-                        _stream.Flush(true);
                 }
                 catch
                 {

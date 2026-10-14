@@ -32,6 +32,9 @@ namespace Sample.WPF
         int _transferCount;
         bool _isDuplexScan;
         ScanPaperSize _selectedScanPaperSize;
+        bool _captureUsesDriverUi;
+        volatile int _lastImageWidth;
+        volatile int _lastImageHeight;
 
         public TwainVM()
         {
@@ -80,6 +83,8 @@ namespace Sample.WPF
             get { return _selectedSource; }
             set
             {
+                if (ReferenceEquals(_selectedSource, value))
+                    return;
                 if (_session.State == 4)
                 {
                     _session.CurrentSource.Close();
@@ -146,7 +151,7 @@ namespace Sample.WPF
                     }
                 }, () =>
                 {
-                    return _session.State == 4 && _session.CurrentSource.Capabilities.CapEnableDSUIOnly.GetCurrent() == BoolType.True;
+                    return _session.State == 4 && SelectedSource != null && SelectedSource.SupportsDriverUIOnly;
                 }));
             }
         }
@@ -163,6 +168,8 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
+                            AppLog.Info("Scan build=20261014-epson-a4l-full-area-crop, exe={0}, library={1}",
+                                Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
                             {
@@ -170,34 +177,65 @@ namespace Sample.WPF
                                 return;
                             }
 
+                            var preparationTimer = Stopwatch.StartNew();
                             var src = _session.CurrentSource;
                             AppLog.Info("开始扫描 source={0} manufacturer={1} size={2} showUI={3} state={4} newDsm={5}",
                                 src.Name, src.Manufacturer, selectedSize, ShowUI, _session.State, NTwain.PlatformInfo.Current.UseNewWinDSM);
                             _needCancel = false;
                             _selectedScanPaperSize = selectedSize;
+                            _captureUsesDriverUi = ShowUI;
                             BeginScanSession(src);
-                            TryEnsureFileTransfer(src);
-                            TryForceScanSize(src, selectedSize);
-                            TryForceFeederScan(src);
-                            TryForceDuplexScan(src);
-                            _isDuplexScan = IsDuplexActive(src);
-
-                            if (!ShowUI)
+                            var restoredEpsonProfile = !_captureUsesDriverUi
+                                && selectedSize == ScanPaperSize.A4L && IsWfC21000(src)
+                                && TryRestoreEpsonA4LSettings(src);
+                            if (!restoredEpsonProfile)
+                                TryEnsureFileTransfer(src);
+                            if (_captureUsesDriverUi)
                             {
+                                AppLog.Info("驱动 UI 对照扫描：由驱动选择进纸、单双面和扫描区域；结束后记录实际参数");
+                            }
+                            else if (selectedSize == ScanPaperSize.A4L && IsWfC21000(src))
+                            {
+                                if (!restoredEpsonProfile)
+                                    TryForceFeederScan(src);
+                                TryApplyEpsonA4LFullArea(src);
+                            }
+                            else if (!restoredEpsonProfile)
+                            {
+                                TryForceFeederScan(src);
+                                if (selectedSize == ScanPaperSize.A4L && IsWfC21000(src))
+                                    TrySetEpsonA4LSimplex(src);
+                                else
+                                    TryForceDuplexScan(src);
+                                TryForceScanSize(src, selectedSize);
+                            }
+                            AppLog.Info("Begin duplex state read");
+                            _isDuplexScan = IsDuplexActive(src);
+                            AppLog.Info("End duplex state read: {0}", _isDuplexScan);
+
+                            if (!ShowUI && !restoredEpsonProfile && !(selectedSize == ScanPaperSize.A4L && IsWfC21000(src)))
+                            {
+                                AppLog.Info("Begin CapIndicators configuration");
                                 var capIndicators = src.Capabilities.CapIndicators;
                                 if (capIndicators.IsSupported && capIndicators.CanSet)
                                 {
-                                    capIndicators.SetValue(BoolType.False);
+                                    var indicatorRc = capIndicators.SetValue(BoolType.False);
+                                    AppLog.Info("End CapIndicators SET: {0}", indicatorRc);
                                 }
                             }
 
+                            AppLog.Info("Pre-enable configuration complete, 耗时={0} ms", preparationTimer.ElapsedMilliseconds);
                             var mode = ShowUI ? SourceEnableMode.ShowUI : SourceEnableMode.NoUI;
                             AppLog.Info("调用 Enable, mode={0}, hwnd=0x{1:X}", mode, WindowHandle.ToInt64());
+                            preparationTimer.Restart();
                             var rc = src.Enable(mode, true, WindowHandle);
+                            AppLog.Info("驱动 Enable 耗时: {0} ms", preparationTimer.ElapsedMilliseconds);
                             AppLog.Info("Enable 返回 {0}, state={1}", rc, _session.State);
                             if (rc != ReturnCode.Success)
                             {
-                                ShowScanMessage("扫描没有启动", "Enable 返回 " + rc + "。请查看日志确认卡在哪一项能力设置。");
+                                var status = src.GetStatus();
+                                AppLog.Info("Enable failed: ReturnCode={0}, ConditionCode={1}", rc, status.ConditionCode);
+                                ShowScanMessage("扫描没有启动", "Enable 返回 " + rc + "，驱动错误码=" + status.ConditionCode + "。详情见日志。");
                             }
                             CommandManager.InvalidateRequerySuggested();
                         }
@@ -479,7 +517,7 @@ namespace Sample.WPF
 
                 if (IsEpson(src))
                 {
-                    TryApplyEpsonScanArea(src, applySize, label);
+                    TryApplyEpsonScanArea(src, applySize, label, ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(src, size), size == ScanPaperSize.A4L && IsWfC21000(src));
                     return;
                 }
 
@@ -581,7 +619,7 @@ namespace Sample.WPF
                 if (caps.CapDuplexEnabled.IsSupported && caps.CapDuplexEnabled.CanSet)
                 {
                     var rc = caps.CapDuplexEnabled.SetValue(BoolType.True);
-                    AppLog.Info("强制双面扫描 (CapDuplexEnabled): {0}, 当前={1}", rc, caps.CapDuplexEnabled.GetCurrent());
+                    AppLog.Info("强制双面扫描 (CapDuplexEnabled): {0}", rc);
                 }
                 else
                 {
@@ -592,6 +630,23 @@ namespace Sample.WPF
             {
                 AppLog.Info("强制双面扫描失败: {0}", ex.Message);
             }
+        }
+
+        static void TrySetEpsonA4LSimplex(DataSource src)
+        {
+            try
+            {
+                var duplex = src.Capabilities.CapDuplexEnabled;
+                if (!duplex.IsSupported || !duplex.CanSet)
+                    return;
+                if (duplex.CanGetCurrent && duplex.GetCurrent() == BoolType.False)
+                {
+                    AppLog.Info("WF-C21000 A4L: duplex already disabled, matching driver UI");
+                    return;
+                }
+                AppLog.Info("WF-C21000 A4L: disable duplex to match driver UI: {0}", duplex.SetValue(BoolType.False));
+            }
+            catch (Exception ex) { AppLog.Info("WF-C21000 A4L duplex configuration failed: {0}", ex.Message); }
         }
 
         static void TryApplyScanOrientation(DataSource src, ScanPaperSize size)
@@ -638,15 +693,209 @@ namespace Sample.WPF
         /// 爱普生不接受把单位改成厘米后再写 ImageLayout，失败后 Enable 也会失败。
         /// 标准尺寸本身又不会改实际扫描范围，所以按驱动当前单位写 ICAP_FRAMES。
         /// </summary>
-        static void TryApplyEpsonScanArea(DataSource src, ScanPaperSize size, string label)
+        static void TryApplyEpsonScanArea(DataSource src, ScanPaperSize size, string label, bool useDriverPaperArea, bool horizontalPaper)
         {
+            if (horizontalPaper)
+            {
+                TryApplyEpsonA4LUiGeometry(src);
+                return;
+            }
+            var autoRotate = src.Capabilities.ICapAutomaticRotate;
+            if (autoRotate.IsSupported && autoRotate.CanSet)
+            {
+                var rc = autoRotate.SetValue(BoolType.False);
+                AppLog.Info("Epson ICapAutomaticRotate=False: {0}", rc);
+                if (rc == ReturnCode.Failure)
+                    AppLog.Info("ICapAutomaticRotate error: {0}", src.GetStatus().ConditionCode);
+            }
             TrySetSupportedPaperSize(src, size, label);
+            if (useDriverPaperArea)
+            {
+                var orientation = src.Capabilities.ICapOrientation;
+                if (orientation.IsSupported && orientation.CanSet)
+                {
+                    var rc = orientation.SetValue(OrientationType.Rot0);
+                    AppLog.Info("WF-C21000 physical paper orientation Rot0: {0}, current={1}", rc, orientation.GetCurrent());
+                    if (rc == ReturnCode.Failure)
+                        AppLog.Info("Orientation error: {0}", src.GetStatus().ConditionCode);
+                }
+            }
+            else
+                TryApplyScanOrientation(src, size);
+
+            var rotation = src.Capabilities.ICapRotation;
+            if (rotation.IsSupported && rotation.CanSet)
+            {
+                var rotationRc = rotation.SetValue((TWFix32)0f);
+                AppLog.Info("Epson ICapRotation=0: {0}", rotationRc);
+                if (rotationRc == ReturnCode.Failure)
+                    AppLog.Info("ICapRotation error: {0}", src.GetStatus().ConditionCode);
+            }
 
             if (!TrySetFrame(src, size, false))
                 AppLog.Info("爱普生按当前单位设置扫描区域失败");
 
-            if (size.IsLandscape())
-                TryApplyScanOrientation(src, size);
+
+            if (AppLog.Instance.IsDebugEnabled)
+                LogScanGeometry(src);
+        }
+
+        static void TryApplyEpsonA4LUiGeometry(DataSource src)
+        {
+            // Values measured after a successful WF-C21000 A4L scan through its own UI.
+            // Avoid rewriting an already-matching capability: Epson's UI also maintains
+            // private state which a redundant TWAIN SET may reset.
+            var caps = src.Capabilities;
+            if (caps.ICapAutomaticRotate.IsSupported && caps.ICapAutomaticRotate.CanSet
+                && (!caps.ICapAutomaticRotate.CanGetCurrent || caps.ICapAutomaticRotate.GetCurrent() != BoolType.False))
+                AppLog.Info("WF-C21000 A4L AutomaticRotate=False: {0}", caps.ICapAutomaticRotate.SetValue(BoolType.False));
+
+            var sizes = caps.ICapSupportedSizes;
+            if (sizes.IsSupported && sizes.CanSet
+                && (!sizes.CanGetCurrent || sizes.GetCurrent() != SupportedSize.A4))
+                AppLog.Info("WF-C21000 A4L SupportedSizes=A4: {0}", sizes.SetValue(SupportedSize.A4));
+
+            var orientation = caps.ICapOrientation;
+            if (orientation.IsSupported && orientation.CanSet
+                && (!orientation.CanGetCurrent || orientation.GetCurrent() != OrientationType.Rot0))
+                AppLog.Info("WF-C21000 A4L Orientation=Rot0: {0}", orientation.SetValue(OrientationType.Rot0));
+
+            var rotation = caps.ICapRotation;
+            if (rotation.IsSupported && rotation.CanSet
+                && (!rotation.CanGetCurrent || Math.Abs((float)rotation.GetCurrent()) > 0.01f))
+                AppLog.Info("WF-C21000 A4L Rotation=0: {0}", rotation.SetValue((TWFix32)0f));
+
+            var units = caps.ICapUnits;
+            if (units.IsSupported && units.CanSet
+                && (!units.CanGetCurrent || units.GetCurrent() != Unit.Inches))
+                AppLog.Info("WF-C21000 A4L Units=Inches: {0}", units.SetValue(Unit.Inches));
+
+            var frames = caps.ICapFrames;
+            if (frames.IsSupported && frames.CanSet)
+            {
+                var matchesUiFrame = false;
+                if (frames.CanGetCurrent)
+                {
+                    var current = frames.GetCurrent();
+                    matchesUiFrame = Math.Abs((float)current.Left) < 0.01f
+                        && Math.Abs((float)current.Top) < 0.01f
+                        && Math.Abs((float)current.Right - 11.69f) < 0.01f
+                        && Math.Abs((float)current.Bottom - 8.27f) < 0.01f;
+                    AppLog.Info("WF-C21000 A4L current frame={0}, matches driver UI={1}", current, matchesUiFrame);
+                }
+                if (!matchesUiFrame)
+                {
+                    var uiFrame = new TWFrame { Left = 0, Top = 0, Right = 11.69f, Bottom = 8.27f };
+                    AppLog.Info("WF-C21000 A4L set driver UI frame {0}: {1}", uiFrame, frames.SetValue(uiFrame));
+                }
+            }
+            LogScanGeometry(src);
+        }
+
+        static string EpsonA4LSettingsPath
+        {
+            get
+            {
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NTwain", "profiles", "epson-wf-c21000-a4l.dsdata");
+            }
+        }
+
+        void TrySaveEpsonA4LSettings(DataSource src)
+        {
+            if (!IsWfC21000(src) || _lastImageWidth <= _lastImageHeight || _lastImageWidth == 0)
+                return;
+            try
+            {
+                var frames = src.Capabilities.ICapFrames;
+                var sizes = src.Capabilities.ICapSupportedSizes;
+                if (!frames.IsSupported || !frames.CanGetCurrent || !sizes.IsSupported || !sizes.CanGetCurrent
+                    || sizes.GetCurrent() != SupportedSize.A4)
+                    return;
+                var frame = frames.GetCurrent();
+                if (Math.Abs((float)frame.Left) > 0.01f || Math.Abs((float)frame.Top) > 0.01f
+                    || Math.Abs((float)frame.Right - 11.69f) > 0.01f
+                    || Math.Abs((float)frame.Bottom - 8.27f) > 0.01f)
+                    return;
+
+                var custom = src.Capabilities.CapCustomDSData;
+                if (!custom.IsSupported || !custom.CanGetCurrent || custom.GetCurrent() != BoolType.True)
+                {
+                    AppLog.Info("WF-C21000 does not expose CustomDSData; driver UI settings cannot be saved");
+                    return;
+                }
+                var settings = src.Settings;
+                if (settings == null || settings.Length == 0 || settings.Length > 4 * 1024 * 1024)
+                {
+                    AppLog.Info("WF-C21000 CustomDSData unavailable or unexpected length: {0}", settings == null ? 0 : settings.Length);
+                    return;
+                }
+                var path = EpsonA4LSettingsPath;
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, settings);
+                AppLog.Info("WF-C21000 A4L driver UI settings saved: {0}, bytes={1}", path, settings.Length);
+            }
+            catch (Exception ex) { AppLog.Info("WF-C21000 A4L driver UI settings capture failed: {0}", ex); }
+        }
+
+        static bool TryRestoreEpsonA4LSettings(DataSource src)
+        {
+            var path = EpsonA4LSettingsPath;
+            if (!File.Exists(path))
+            {
+                AppLog.Info("WF-C21000 A4L driver UI settings profile not present: {0}", path);
+                return false;
+            }
+            try
+            {
+                var custom = src.Capabilities.CapCustomDSData;
+                if (!custom.IsSupported || !custom.CanGetCurrent || custom.GetCurrent() != BoolType.True)
+                {
+                    AppLog.Info("WF-C21000 CustomDSData is not available for restore");
+                    return false;
+                }
+                var settings = File.ReadAllBytes(path);
+                if (settings.Length == 0 || settings.Length > 4 * 1024 * 1024)
+                    return false;
+                src.Settings = settings;
+                AppLog.Info("WF-C21000 A4L driver UI settings restored: bytes={0}", settings.Length);
+                var readback = src.Settings;
+                AppLog.Info("WF-C21000 A4L private settings readback: bytes={0}, exactMatch={1}",
+                    readback == null ? 0 : readback.Length,
+                    readback != null && settings.SequenceEqual(readback));
+                LogScanGeometry(src);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("WF-C21000 A4L driver UI settings restore failed: {0}", ex);
+                return false;
+            }
+        }
+
+        static void TryApplyEpsonA4LFullArea(DataSource src)
+        {
+            try
+            {
+                AppLog.Info("WF-C21000 A4L: acquire full area before cropping to A4L");
+                var sizes = src.Capabilities.ICapSupportedSizes;
+                if (sizes.IsSupported && sizes.CanSet)
+                    AppLog.Info("Full-area SupportedSizes=A3: {0}", sizes.SetValue(SupportedSize.A3));
+                var units = src.Capabilities.ICapUnits;
+                if (units.IsSupported && units.CanSet && units.GetCurrent() != Unit.Inches)
+                    AppLog.Info("Full-area Units=Inches: {0}", units.SetValue(Unit.Inches));
+                var orientation = src.Capabilities.ICapOrientation;
+                if (orientation.IsSupported && orientation.CanSet)
+                    AppLog.Info("Full-area Orientation=Rot0: {0}", orientation.SetValue(OrientationType.Rot0));
+                var frames = src.Capabilities.ICapFrames;
+                if (frames.IsSupported && frames.CanSet)
+                {
+                    var frame = new TWFrame { Left = 0, Top = 0, Right = 11.69f, Bottom = 17f };
+                    AppLog.Info("Full-area Frames={0}: {1}", frame, frames.SetValue(frame));
+                }
+                LogScanGeometry(src);
+            }
+            catch (Exception ex) { AppLog.Info("WF-C21000 A4L full-area configuration failed: {0}", ex); }
         }
 
         static void TrySetSupportedPaperSize(DataSource src, ScanPaperSize size, string label)
@@ -659,15 +908,8 @@ namespace Sample.WPF
             if (!sizes.IsSupported || !sizes.CanSet)
                 return;
 
-            var available = SafeGetValues(sizes);
-            if (available.Count > 0 && !available.Contains(twainSize.Value))
-            {
-                AppLog.Info("当前驱动未列出 {0}，可用尺寸: {1}", label, string.Join(", ", available));
-                return;
-            }
-
             var rc = sizes.SetValue(twainSize.Value);
-            AppLog.Info("强制扫描尺寸 {0} (ICapSupportedSizes): {1}, 当前={2}", label, rc, sizes.GetCurrent());
+            AppLog.Info("强制扫描尺寸 {0} (ICapSupportedSizes): {1}", label, rc);
         }
 
         static bool TrySetFrame(DataSource src, ScanPaperSize size, bool changeUnit)
@@ -730,12 +972,51 @@ namespace Sample.WPF
             }
 
             var rc = frames.SetValue(frame);
+            if (rc == ReturnCode.Failure)
+                AppLog.Info("ICAP_FRAMES SET failed: {0}", src.GetStatus().ConditionCode);
             AppLog.Info("强制扫描尺寸 {0} (ICapFrames {1}): {2}, Frame={3}", size.GetDisplayName(), unit, rc, frame);
             return rc == ReturnCode.Success;
         }
 
+        static void LogScanGeometry(DataSource src)
+        {
+            LogCurrentCapability("Units", src.Capabilities.ICapUnits);
+            LogCurrentCapability("Orientation", src.Capabilities.ICapOrientation);
+            LogCurrentCapability("AutomaticRotate", src.Capabilities.ICapAutomaticRotate);
+            LogCurrentCapability("Rotation", src.Capabilities.ICapRotation);
+            LogCurrentCapability("SupportedSizes", src.Capabilities.ICapSupportedSizes);
+            LogCurrentCapability("Frames", src.Capabilities.ICapFrames);
+            LogCurrentCapability("PhysicalWidth", src.Capabilities.ICapPhysicalWidth);
+            LogCurrentCapability("PhysicalHeight", src.Capabilities.ICapPhysicalHeight);
+            LogCurrentCapability("FeederEnabled", src.Capabilities.CapFeederEnabled);
+            LogCurrentCapability("FeederAlignment", src.Capabilities.CapFeederAlignment);
+            LogCurrentCapability("DuplexEnabled", src.Capabilities.CapDuplexEnabled);
+            LogCurrentCapability("XferCount", src.Capabilities.CapXferCount);
+            LogCurrentCapability("AutoSize", src.Capabilities.ICapAutoSize);
+            LogCurrentCapability("UndefinedImageSize", src.Capabilities.ICapUndefinedImageSize);
+            LogCurrentCapability("AutomaticBorderDetection", src.Capabilities.ICapAutomaticBorderDetection);
+            LogCurrentCapability("XResolution", src.Capabilities.ICapXResolution);
+            LogCurrentCapability("YResolution", src.Capabilities.ICapYResolution);
+            LogCurrentCapability("XferMech", src.Capabilities.ICapXferMech);
+            LogCurrentCapability("CustomDSData", src.Capabilities.CapCustomDSData);
+            // Epson: avoid DAT_IMAGELAYOUT/MSG_GET in pre-enable diagnostics. Read ICAP_FRAMES above instead.
+        }
+
+        static void LogCurrentCapability<T>(string name, IReadOnlyCapWrapper<T> cap)
+        {
+            try
+            {
+                if (cap.IsSupported && cap.CanGetCurrent)
+                    AppLog.Info("Scan geometry: {0}={1}", name, cap.GetCurrent());
+            }
+            catch (Exception ex) { AppLog.Info("{0} GET failed: {1}", name, ex.Message); }
+        }
+
         static float GetFrameLeft(DataSource src, float maxWidth, float width)
         {
+            var feeder = src.Capabilities.CapFeederEnabled;
+            if (!feeder.IsSupported || !feeder.CanGetCurrent || feeder.GetCurrent() != BoolType.True)
+                return 0;
             var alignCap = src.Capabilities.CapFeederAlignment;
             FeederAlignment align = FeederAlignment.None;
             if (alignCap.IsSupported && alignCap.CanGetCurrent)
@@ -743,11 +1024,7 @@ namespace Sample.WPF
                 align = alignCap.GetCurrent();
                 AppLog.Info("进纸对齐: {0}", align);
             }
-            else if (IsEpson(src))
-            {
-                align = FeederAlignment.Center;
-                AppLog.Info("爱普生未报告进纸对齐，按居中计算扫描区域");
-            }
+
 
             float left = 0;
             if (align == FeederAlignment.Center)
@@ -764,6 +1041,12 @@ namespace Sample.WPF
             if (units != null && units.IsSupported && units.CanGetCurrent)
                 return units.GetCurrent();
             return Unit.Inches;
+        }
+
+        static bool IsWfC21000(DataSource src)
+        {
+            return src != null && src.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
+                && IsEpson(src);
         }
 
         static bool IsEpson(DataSource src)
@@ -882,6 +1165,18 @@ namespace Sample.WPF
                 {
                     StopHideScanStatusTimer();
                     AppLog.Info("扫描结束，共保存 {0} 张，目录: {1}", _transferCount, _currentScanFolder);
+                    if (_captureUsesDriverUi)
+                    {
+                        AppLog.Info("驱动 UI 扫描结束，TWAIN state={0}；以下为驱动界面应用后的参数", _session.State);
+                        if (_session.State == 4 && _session.CurrentSource != null)
+                        {
+                            LogScanGeometry(_session.CurrentSource);
+                            TrySaveEpsonA4LSettings(_session.CurrentSource);
+                        }
+                        else
+                            AppLog.Info("驱动 UI 参数未读取：数据源尚未返回 state 4");
+                        _captureUsesDriverUi = false;
+                    }
                     //_session.CurrentSource.Close();
                     
                     // 触发状态更新
@@ -978,11 +1273,16 @@ namespace Sample.WPF
 
         void BeginScanSession(DataSource src)
         {
-            _currentScanFolder = Path.Combine(_scanRootFolder, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            var folderName = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var folder = Path.Combine(_scanRootFolder, folderName);
+            for (var suffix = 2; Directory.Exists(folder); suffix++)
+                folder = Path.Combine(_scanRootFolder, folderName + "-" + suffix);
+            _currentScanFolder = folder;
             Directory.CreateDirectory(_currentScanFolder);
             _transferCount = 0;
             _isDuplexScan = false;
-            CapturedImages.Clear();
+            _lastImageWidth = 0;
+            _lastImageHeight = 0;
             AppLog.Info("本次扫描保存目录: {0}", _currentScanFolder);
             RaisePropertyChanged(() => ScanSaveFolderPath);
         }
@@ -1040,22 +1340,8 @@ namespace Sample.WPF
                 return;
             }
 
-            var available = SafeGetValues(xferMech);
-            if (available.Count > 0 && !available.Contains(XferMech.File))
-            {
-                AppLog.Info("当前驱动不支持 File 传输，可用模式: {0}", string.Join(", ", available));
-                return;
-            }
-
             var rc = xferMech.SetValue(XferMech.File);
-            AppLog.Info("设置传输模式 File: {0}, 当前={1}", rc, xferMech.GetCurrent());
-
-            var jpegQuality = src.Capabilities.ICapJpegQuality;
-            if (jpegQuality.IsSupported && jpegQuality.CanSet)
-            {
-                var qualityRc = jpegQuality.SetValue(JpegQuality.High);
-                AppLog.Info("设置 JPEG 质量 High: {0}", qualityRc);
-            }
+            AppLog.Info("设置传输模式 File: {0}", rc);
         }
 
         void LogReceivedImageInfo(DataTransferredEventArgs e)
@@ -1063,59 +1349,19 @@ namespace Sample.WPF
             var transferIndex = _transferCount + 1;
             try
             {
-                var infos = e.GetExtImageInfo(
-                    ExtendedImageInfo.PageNumber,
-                    ExtendedImageInfo.PageSide,
-                    ExtendedImageInfo.DocumentNumber).ToList();
-
-                AppLog.Info(
-                    "收到图像: 第 {0} 次传输, 进纸={1}, 页面={2}, 文档号={3}",
-                    transferIndex,
-                    FormatExtInfo(infos, ExtendedImageInfo.PageNumber, null),
-                    FormatExtInfo(infos, ExtendedImageInfo.PageSide, FormatPageSide),
-                    FormatExtInfo(infos, ExtendedImageInfo.DocumentNumber, null));
+                var image = e.ImageInfo;
+                if (image != null)
+                {
+                    _lastImageWidth = image.ImageWidth;
+                    _lastImageHeight = image.ImageLength;
+                    AppLog.Info("Raw image: {0} x {1} pixels, resolution={2} x {3}",
+                        image.ImageWidth, image.ImageLength, image.XResolution, image.YResolution);
+                }
+                AppLog.Info("收到图像: 第 {0} 次传输", transferIndex);
             }
             catch (Exception ex)
             {
-                AppLog.Info("收到图像: 第 {0} 次传输, 读取进纸信息失败: {1}", transferIndex, ex.Message);
-            }
-        }
-
-        static string FormatExtInfo(IList<TWInfo> infos, ExtendedImageInfo id, Func<object, string> formatValue)
-        {
-            var info = infos.FirstOrDefault(it => it.InfoID == id);
-            if (info.InfoID != id || info.ReturnCode != ReturnCode.Success)
-                return "驱动未提供";
-
-            var values = info.ReadValues();
-            if (values == null || values.Count == 0 || values[0] == null)
-                return "驱动未提供";
-
-            return formatValue == null ? Convert.ToString(values[0]) : formatValue(values[0]);
-        }
-
-        static string FormatPageSide(object value)
-        {
-            ushort side;
-            try
-            {
-                side = Convert.ToUInt16(value);
-            }
-            catch (Exception)
-            {
-                return Convert.ToString(value);
-            }
-
-            switch ((CameraSide)side)
-            {
-                case CameraSide.Top:
-                    return "正面";
-                case CameraSide.Bottom:
-                    return "背面";
-                case CameraSide.Both:
-                    return "双面";
-                default:
-                    return string.Format("未知({0})", side);
+                AppLog.Info("收到图像: 第 {0} 次传输, 读取图像信息失败: {1}", transferIndex, ex.Message);
             }
         }
 
@@ -1133,7 +1379,8 @@ namespace Sample.WPF
                 }
 
                 savedPath = ScanImageRotationHelper.EnsureJpeg(savedPath);
-                ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
+                if (!_captureUsesDriverUi)
+                    ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);
                 QueueScanItem(savedPath);

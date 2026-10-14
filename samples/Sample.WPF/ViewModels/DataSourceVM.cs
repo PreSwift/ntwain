@@ -24,6 +24,9 @@ namespace Sample.WPF
     {
         public DataSource DS { get; set; }
 
+        // WPF command requery must never enter a TWAIN driver (including during native dialogs).
+        public bool SupportsDriverUIOnly { get; private set; }
+
         public string Name { get { return DS.Name; } }
         public string Version { get { return DS.Version.Info; } }
         public string Protocol { get { return DS.ProtocolVersion.ToString(); } }
@@ -54,17 +57,36 @@ namespace Sample.WPF
         public void Open()
         {
             AppLog.Info("打开数据源: {0} / {1}", DS.Manufacturer, DS.Name);
+            SupportsDriverUIOnly = false;
             Caps.Clear();
+            var timer = Stopwatch.StartNew();
             var rc = DS.Open();
+            AppLog.Info("驱动 Open 耗时: {0} ms, 结果={1}", timer.ElapsedMilliseconds, rc);
+            timer.Restart();
             //rc = DGControl.Status.Get(dsId, ref stat);
             if (rc == ReturnCode.Success)
             {
-                foreach (var c in DS.Capabilities.CapSupportedCaps.GetValues().Select(o => new CapVM(DS, o)))
+                AppLog.Info("开始读取驱动能力列表");
+                var supportedCaps = DS.Capabilities.CapSupportedCaps.GetValues().ToList();
+                AppLog.Info("读取驱动能力列表耗时: {0} ms, 能力数={1}", timer.ElapsedMilliseconds, supportedCaps.Count);
+                foreach (var cap in supportedCaps)
+                    Caps.Add(new CapVM(DS, cap));
+            }
+            if (rc == ReturnCode.Success)
+            {
+                try
                 {
-                    Caps.Add(c);
+                    var cap = DS.Capabilities.CapEnableDSUIOnly;
+                    SupportsDriverUIOnly = cap.IsSupported && cap.CanGetCurrent
+                        && cap.GetCurrent() == BoolType.True;
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Info("读取驱动界面支持失败: {0}", ex.Message);
                 }
             }
-            AppLog.Info("打开数据源结果: {0}, 能力数={1}", rc, Caps.Count);
+            AppLog.Info("能力列表初始化耗时: {0} ms", timer.ElapsedMilliseconds);
+            AppLog.Info("打开数据源结果: {0}, 能力数={1}, UIOnly={2}", rc, Caps.Count, SupportsDriverUIOnly);
         }
 
         private string _capFilter;
