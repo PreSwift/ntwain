@@ -17,24 +17,38 @@ namespace Sample.WPF
             return size == ScanPaperSize.A4 || size == ScanPaperSize.K16;
         }
 
+        static bool NeedsFrontBackRotation(ScanPaperSize size, DataSource src)
+        {
+            if (size == ScanPaperSize.A3 || size == ScanPaperSize.K8)
+            {
+                if (src == null)
+                    return false;
+                var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+                return info.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0
+                    || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+
+            return RequiresPostRotation(size) && ScannerOrientationHelper.ShouldInvertOrientation(src);
+        }
+
         public static bool TryRotateSavedImage(string path, ScanPaperSize selectedSize, DataSource src)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return false;
 
-            if (selectedSize == ScanPaperSize.A4L && src != null
+            if ((selectedSize == ScanPaperSize.A4L || selectedSize == ScanPaperSize.K16L) && src != null
                 && src.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
                 && src.Manufacturer.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0)
-                return TryCropEpsonA4LFullArea(path);
+                return TryCropEpsonA4LFullArea(path, selectedSize);
 
             RotateFlipType flip;
             string reason;
             if (ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(src, selectedSize))
             {
                 flip = RotateFlipType.Rotate270FlipNone;
-                reason = "WF-C21000: Rot0 A4L capture to portrait";
+                reason = "WF-C21000: Rot0 landscape capture to portrait";
             }
-            else if (RequiresPostRotation(selectedSize) && ScannerOrientationHelper.ShouldInvertOrientation(src))
+            else if (NeedsFrontBackRotation(selectedSize, src))
             {
                 var side = GetSideFromFileName(path);
                 flip = side == "B"
@@ -56,12 +70,15 @@ namespace Sample.WPF
                     bmp.RotateFlip(flip);
                     if (epsonA4)
                     {
-                        // This driver transfers all printed content but omits the blank tail of A4.
+                        // This driver transfers all printed content but omits the blank tail.
                         // Restore the paper canvas without stretching any scanned pixels.
-                        var a4Height = (int)Math.Round(bmp.Width * 297.0 / 210.0);
-                        if (bmp.Height < a4Height)
+                        var dims = selectedSize.GetDimensionsMm();
+                        var longMm = Math.Max(dims.WidthMm, dims.HeightMm);
+                        var shortMm = Math.Min(dims.WidthMm, dims.HeightMm);
+                        var pageHeight = (int)Math.Round(bmp.Width * longMm / shortMm);
+                        if (bmp.Height < pageHeight)
                         {
-                            using (var page = new Bitmap(bmp.Width, a4Height))
+                            using (var page = new Bitmap(bmp.Width, pageHeight))
                             using (var graphics = Graphics.FromImage(page))
                             {
                                 page.SetResolution(bmp.HorizontalResolution, bmp.VerticalResolution);
@@ -70,8 +87,8 @@ namespace Sample.WPF
                                 tempPath = path + ".tmp";
                                 SaveJpeg(page, tempPath);
                             }
-                            AppLog.Info("WF-C21000 A4: restored blank page tail, {0}x{1} -> {0}x{2}",
-                                bmp.Width, bmp.Height, a4Height);
+                            AppLog.Info("WF-C21000 {0}: restored blank page tail, {1}x{2} -> {1}x{3}",
+                                selectedSize.GetDisplayName(), bmp.Width, bmp.Height, pageHeight);
                         }
                     }
                     if (tempPath == null)
@@ -92,23 +109,26 @@ namespace Sample.WPF
             }
         }
 
-        static bool TryCropEpsonA4LFullArea(string path)
+        static bool TryCropEpsonA4LFullArea(string path, ScanPaperSize size)
         {
             try
             {
                 string tempPath = path + ".tmp";
+                var dims = size.GetDimensionsMm();
+                var longInches = Math.Max(dims.WidthMm, dims.HeightMm) / 25.4;
+                var shortInches = Math.Min(dims.WidthMm, dims.HeightMm) / 25.4;
                 using (var bmp = new Bitmap(path))
                 {
                     // The WF-C21000 NoUI transfer starts at the opposite edge from its UI
-                    // transfer. Acquiring the full A3-height area preserves the entire A4
-                    // sheet. Crop the centered 210 x 297 mm sheet, then orient it like the UI.
-                    int longPixels = (int)Math.Round(11.69 * bmp.HorizontalResolution);
-                    int shortPixels = (int)Math.Round(8.27 * bmp.VerticalResolution);
+                    // transfer. Acquiring the full A3-height area preserves the sheet.
+                    // Crop the centered short x long window, then orient it like the UI.
+                    int longPixels = (int)Math.Round(longInches * bmp.HorizontalResolution);
+                    int shortPixels = (int)Math.Round(shortInches * bmp.VerticalResolution);
                     if (longPixels <= 0 || shortPixels <= 0
                         || bmp.Width < shortPixels || bmp.Height < longPixels)
                     {
-                        AppLog.Info("WF-C21000 A4L: full-area image too small to crop: {0}x{1}, need {2}x{3}",
-                            bmp.Width, bmp.Height, shortPixels, longPixels);
+                        AppLog.Info("WF-C21000 {0}: full-area image too small to crop: {1}x{2}, need {3}x{4}",
+                            size.GetDisplayName(), bmp.Width, bmp.Height, shortPixels, longPixels);
                         return false;
                     }
                     int left = (bmp.Width - shortPixels) / 2;
@@ -119,15 +139,15 @@ namespace Sample.WPF
                         page.SetResolution(bmp.HorizontalResolution, bmp.VerticalResolution);
                         SaveJpeg(page, tempPath);
                     }
-                    AppLog.Info("WF-C21000 A4L: full-area {0}x{1}, crop={2}, rotate 270 to {3}x{4}",
-                        bmp.Width, bmp.Height, area, longPixels, shortPixels);
+                    AppLog.Info("WF-C21000 {0}: full-area {1}x{2}, crop={3}, rotate 270 to {4}x{5}",
+                        size.GetDisplayName(), bmp.Width, bmp.Height, area, longPixels, shortPixels);
                 }
                 File.Replace(tempPath, path, null);
                 return true;
             }
             catch (Exception ex)
             {
-                AppLog.Info("WF-C21000 A4L crop failed: {0}", ex);
+                AppLog.Info("WF-C21000 {0} crop failed: {1}", size, ex);
                 return false;
             }
         }

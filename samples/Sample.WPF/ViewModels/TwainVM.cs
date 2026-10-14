@@ -168,7 +168,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261014-epson-16k-geometry-check, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261014-epson-a3-8k-rotate, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -194,7 +194,7 @@ namespace Sample.WPF
                             {
                                 AppLog.Info("驱动 UI 对照扫描：由驱动选择进纸、单双面和扫描区域；结束后记录实际参数");
                             }
-                            else if (selectedSize == ScanPaperSize.A4L && IsWfC21000(src))
+                            else if (IsEpsonFullAreaLandscape(src, selectedSize))
                             {
                                 if (!restoredEpsonProfile)
                                     TryForceFeederScan(src);
@@ -213,7 +213,7 @@ namespace Sample.WPF
                             _isDuplexScan = IsDuplexActive(src);
                             AppLog.Info("End duplex state read: {0}", _isDuplexScan);
 
-                            if (!ShowUI && !restoredEpsonProfile && !(selectedSize == ScanPaperSize.A4L && IsWfC21000(src)))
+                            if (!ShowUI && !restoredEpsonProfile && !IsEpsonFullAreaLandscape(src, selectedSize))
                             {
                                 AppLog.Info("Begin CapIndicators configuration");
                                 var capIndicators = src.Capabilities.CapIndicators;
@@ -1041,6 +1041,11 @@ namespace Sample.WPF
             if (units != null && units.IsSupported && units.CanGetCurrent)
                 return units.GetCurrent();
             return Unit.Inches;
+        }
+
+        static bool IsEpsonFullAreaLandscape(DataSource src, ScanPaperSize size)
+        {
+            return IsWfC21000(src) && (size == ScanPaperSize.A4L || size == ScanPaperSize.K16L);
         }
 
         static bool IsWfC21000(DataSource src)

@@ -9,7 +9,8 @@ namespace Sample.WPF
     {
         public static bool UsesEpsonA4LandscapeAcquisition(DataSource src, ScanPaperSize size)
         {
-            return src != null && size == ScanPaperSize.A4
+            return src != null
+                && (size == ScanPaperSize.A4 || size == ScanPaperSize.K16)
                 && src.Name.IndexOf("WF-C21000", System.StringComparison.OrdinalIgnoreCase) >= 0
                 && src.Manufacturer.IndexOf("EPSON", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
@@ -31,7 +32,7 @@ namespace Sample.WPF
         public static ScanPaperSize GetEffectiveSize(DataSource src, ScanPaperSize size)
         {
             if (UsesEpsonA4LandscapeAcquisition(src, size))
-                return ScanPaperSize.A4L;
+                return size == ScanPaperSize.K16 ? ScanPaperSize.K16L : ScanPaperSize.A4L;
 
             if (!ShouldInvertOrientation(src))
                 return size;
