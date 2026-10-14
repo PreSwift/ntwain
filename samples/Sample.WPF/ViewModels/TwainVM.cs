@@ -168,7 +168,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261014-epson-a4l-full-area-crop, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261014-epson-16k-geometry-check, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -736,7 +736,7 @@ namespace Sample.WPF
                 AppLog.Info("爱普生按当前单位设置扫描区域失败");
 
 
-            if (AppLog.Instance.IsDebugEnabled)
+            if (AppLog.Instance.IsDebugEnabled || size == ScanPaperSize.K16 || size == ScanPaperSize.K16L)
                 LogScanGeometry(src);
         }
 
