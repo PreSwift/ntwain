@@ -1,0 +1,303 @@
+{
+  "settings": {
+    "components": {
+      "code": true,
+      "binaries": false
+    },
+    "targetId": "net10.0",
+    "targetDisplayName": ".NETCoreApp,Version=v10.0"
+  },
+  "analysisStartTime": "2026-03-02T03:21:10.7567394Z",
+  "analysisEndTime": "2026-03-02T03:21:17.166515Z",
+  "privacyModeHelpUrl": "https://go.microsoft.com/fwlink/?linkid=2270980",
+  "stats": {
+    "summary": {
+      "projects": 1,
+      "issues": 4,
+      "incidents": 8,
+      "effort": 8
+    },
+    "charts": {
+      "severity": {
+        "Mandatory": 7,
+        "Optional": 1,
+        "Potential": 0,
+        "Information": 0
+      },
+      "category": {
+        "NuGet": 6,
+        "Project": 2
+      }
+    }
+  },
+  "projects": [
+    {
+      "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+      "startingProject": true,
+      "issues": 4,
+      "storyPoints": 8,
+      "properties": {
+        "appName": "Sample.WPF",
+        "projectKind": "ClassicWinForms",
+        "frameworks": [
+          "net48"
+        ],
+        "languages": [
+          "C#"
+        ],
+        "tools": [
+          "MSBuild"
+        ],
+        "isSdkStyle": false,
+        "numberOfFiles": 11,
+        "numberOfCodeFiles": 10,
+        "linesTotal": 1539,
+        "linesOfCode": 1422,
+        "totalApiScanned": 0,
+        "minLinesOfCodeToChange": 0,
+        "maxLinesOfCodeToChange": 0
+      },
+      "ruleInstances": [
+        {
+          "incidentId": "636af6a4-0289-4d7f-aeb5-e314a9f2a8bc",
+          "ruleId": "NuGet.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "CommonServiceLocator, 1.3\n\n\u5EFA\u8BAE:\n\nCommonServiceLocator, 2.0.7",
+              "protected": "CommonServiceLocator, 1.3\n\n\u5EFA\u8BAE:\n\nCommonServiceLocator, 2.0.7"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "CommonServiceLocator, 1.3\n\n\u5EFA\u8BAE:\n\nCommonServiceLocator, 2.0.7",
+            "protectedSnippet": "CommonServiceLocator, 1.3\n\n\u5EFA\u8BAE:\n\nCommonServiceLocator, 2.0.7",
+            "label": "CommonServiceLocator 1.3",
+            "properties": {
+              "PackageId": "CommonServiceLocator",
+              "PackageVersion": "1.3",
+              "PackageNewVersion": "2.0.7",
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "e81d7462-d07d-4cad-9421-2fa5bfd0482e",
+          "ruleId": "NuGet.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ModernWpf, 2.0.0-alpha94\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+              "protected": "ModernWpf, 2.0.0-alpha94\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "ModernWpf, 2.0.0-alpha94\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "protectedSnippet": "ModernWpf, 2.0.0-alpha94\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "label": "ModernWpf 2.0.0-alpha94",
+            "properties": {
+              "PackageId": "ModernWpf",
+              "PackageVersion": "2.0.0-alpha94",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "46012f17-4a25-4ff2-8ec5-22d3eff67f66",
+          "ruleId": "NuGet.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "ModernWpf.Core, 2.0.0-alpha96\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+              "protected": "ModernWpf.Core, 2.0.0-alpha96\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "ModernWpf.Core, 2.0.0-alpha96\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "protectedSnippet": "ModernWpf.Core, 2.0.0-alpha96\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "label": "ModernWpf.Core 2.0.0-alpha96",
+            "properties": {
+              "PackageId": "ModernWpf.Core",
+              "PackageVersion": "2.0.0-alpha96",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "d77ce378-e5c6-4ec2-8885-3f3a224f7b01",
+          "ruleId": "NuGet.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+              "protected": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "protectedSnippet": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "label": "MvvmLightLibs 5.3.0.0",
+            "properties": {
+              "PackageId": "MvvmLightLibs",
+              "PackageVersion": "5.3.0.0",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "09593eef-dc5f-4ce4-a74d-1cef1bb2effc",
+          "ruleId": "NuGet.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "NTwain, 3.7.5\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+              "protected": "NTwain, 3.7.5\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "NTwain, 3.7.5\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "protectedSnippet": "NTwain, 3.7.5\n\n\u5EFA\u8BAE:\n\n\u627E\u4E0D\u5230\u53D7\u652F\u6301\u7684\u7248\u672C",
+            "label": "NTwain 3.7.5",
+            "properties": {
+              "PackageId": "NTwain",
+              "PackageVersion": "3.7.5",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "5df028e5-8018-4c38-ab50-a7e54ff94d0e",
+          "ruleId": "NuGet.0005",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\nHi all users! MVVM Light is not maintained anymore. I recommend looking at the CommunityTookit MVVM package. Thank you for all your support during all these years!! - Laurent\nRemove MvvmLightLibs, and replace with new package CommunityToolkit.Mvvm, 8.4.0",
+              "protected": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\nHi all users! MVVM Light is not maintained anymore. I recommend looking at the CommunityTookit MVVM package. Thank you for all your support during all these years!! - Laurent\nRemove MvvmLightLibs, and replace with new package CommunityToolkit.Mvvm, 8.4.0"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\nHi all users! MVVM Light is not maintained anymore. I recommend looking at the CommunityTookit MVVM package. Thank you for all your support during all these years!! - Laurent\nRemove MvvmLightLibs, and replace with new package CommunityToolkit.Mvvm, 8.4.0",
+            "protectedSnippet": "MvvmLightLibs, 5.3.0.0\n\n\u5EFA\u8BAE:\n\nHi all users! MVVM Light is not maintained anymore. I recommend looking at the CommunityTookit MVVM package. Thank you for all your support during all these years!! - Laurent\nRemove MvvmLightLibs, and replace with new package CommunityToolkit.Mvvm, 8.4.0",
+            "label": "MvvmLightLibs 5.3.0.0",
+            "properties": {
+              "PackageId": "MvvmLightLibs",
+              "PackageVersion": "5.3.0.0",
+              "PackageNewVersion": null,
+              "PackageReplacements": null
+            }
+          }
+        },
+        {
+          "incidentId": "37e43b2d-aa82-4e8f-93d4-59de1b335fcb",
+          "ruleId": "Project.0001",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj"
+          }
+        },
+        {
+          "incidentId": "c417fc67-4386-4649-a81a-bc881431bbf4",
+          "ruleId": "Project.0002",
+          "projectPath": "samples\\Sample.WPF\\Sample.WPF.csproj",
+          "state": "Active",
+          "location": {
+            "snippetModel": {
+              "unrestricted": "\u5F53\u524D\u76EE\u6807\u6846\u67B6: .NETFramework,Version=v4.8\n\u5EFA\u8BAE\u7684\u76EE\u6807\u6846\u67B6: net10.0-windows",
+              "protected": "\u5F53\u524D\u76EE\u6807\u6846\u67B6: .NETFramework,Version=v4.8\n\u5EFA\u8BAE\u7684\u76EE\u6807\u6846\u67B6: net10.0-windows"
+            },
+            "kind": "File",
+            "path": "samples\\Sample.WPF\\Sample.WPF.csproj",
+            "snippet": "\u5F53\u524D\u76EE\u6807\u6846\u67B6: .NETFramework,Version=v4.8\n\u5EFA\u8BAE\u7684\u76EE\u6807\u6846\u67B6: net10.0-windows",
+            "protectedSnippet": "\u5F53\u524D\u76EE\u6807\u6846\u67B6: .NETFramework,Version=v4.8\n\u5EFA\u8BAE\u7684\u76EE\u6807\u6846\u67B6: net10.0-windows",
+            "properties": {
+              "CurrentTargetFramework": ".NETFramework,Version=v4.8",
+              "RecommendedTargetFramework": "net10.0-windows"
+            }
+          }
+        }
+      ],
+      "features": []
+    }
+  ],
+  "rules": {
+    "NuGet.0001": {
+      "id": "NuGet.0001",
+      "isFeature": false,
+      "description": "NuGet \u5305\u4E0E\u6240\u9009\u76EE\u6807\u6846\u67B6\u4E0D\u517C\u5BB9\u3002\n\n\u5305\u9700\u8981\u5347\u7EA7\u5230\u652F\u6301\u6240\u9009\u9879\u76EE\u76EE\u6807\u6846\u67B6\u7684\u7248\u672C\u3002\u5982\u679C\u6CA1\u6709\u652F\u6301\u65B0\u76EE\u6807\u6846\u67B6\u7684\u65B0\u5305\u7248\u672C\uFF0C\u5219\u9700\u8981\u4F7F\u7528\u4E0D\u540C\u7684\u5305\uFF0C\u5E76\u4E14\u6240\u6709\u4EE3\u7801\u90FD\u9700\u8981\u5347\u7EA7\u5230\u65B0\u7684 API\u3002",
+      "label": "NuGet \u5305\u4E0D\u517C\u5BB9",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262529",
+          "isCustom": false
+        }
+      ]
+    },
+    "NuGet.0005": {
+      "id": "NuGet.0005",
+      "isFeature": false,
+      "description": "NuGet \u5305\u5DF2\u5F03\u7528\u3002\n\n\u8BF7\u8F6C\u5230\u5176\u6587\u6863\uFF0C\u67E5\u770B\u662F\u5426\u6709\u5173\u4E8E\u66FF\u6362\u6B64\u5305\u63D0\u4F9B\u7684\u529F\u80FD\u7684\u6307\u5357\u3002",
+      "label": "NuGet \u5305\u5DF2\u5F03\u7528",
+      "severity": "Optional",
+      "effort": 1,
+      "links": [
+        {
+          "url": "https://go.microsoft.com/fwlink/?linkid=2262531",
+          "isCustom": false
+        }
+      ]
+    },
+    "Project.0001": {
+      "id": "Project.0001",
+      "isFeature": false,
+      "description": "\u9879\u76EE\u6587\u4EF6\u9700\u8981\u8F6C\u6362\u4E3A SDK \u6837\u5F0F\u3002\u65B0\u5F0F .NET Framework \u9879\u76EE\u9700\u8981\u66F4\u6539\u9879\u76EE\u6587\u4EF6\u683C\u5F0F\uFF0C\u5E76\u4F7F\u7528\u4E0E\u9879\u76EE\u98CE\u683C\u548C\u529F\u80FD\u5BF9\u5E94\u7684 SDK\u3002",
+      "label": "\u9879\u76EE\u6587\u4EF6\u9700\u8981\u8F6C\u6362\u4E3A SDK \u6837\u5F0F\u3002",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "\u4ECE .NET Framework \u79FB\u690D\u5230 .NET \u7684\u6982\u8FF0",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265227",
+          "isCustom": false
+        },
+        {
+          "title": ".NET \u9879\u76EE SDK",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265226",
+          "isCustom": false
+        }
+      ]
+    },
+    "Project.0002": {
+      "id": "Project.0002",
+      "isFeature": false,
+      "description": "\u9700\u8981\u5C06\u9879\u76EE\u7684\u76EE\u6807\u6846\u67B6\u66F4\u6539\u4E3A\u5DF2\u4E3A\u6B64\u5347\u7EA7\u9009\u62E9\u7684\u65B0\u76EE\u6807\u6846\u67B6\u3002\n\n\u5728\u5347\u7EA7\u671F\u95F4\uFF0C\u76EE\u6807\u6846\u67B6\u5C06\u5728\u9002\u7528\u65F6\u8C03\u6574\u4E3A\u5BF9\u5E94\u7684\u5E73\u53F0\u3002\u5728\u67D0\u4E9B\u60C5\u51B5\u4E0B\uFF0C\u5982\u679C\u9879\u76EE\u4F7F\u7528\u7684\u529F\u80FD\u76EE\u524D\u5728\u65B0\u5F0F .NET Framework (windows\u3001iOS\u3001Android \u7B49)\u4E2D\u5177\u6709\u81EA\u5DF1\u7684\u5E73\u53F0\uFF0C\u5219\u5728\u5347\u7EA7\u540E\u9879\u76EE\u4F1A\u751F\u6210\u591A\u4E2A\u76EE\u6807\u6846\u67B6\u3002",
+      "label": "\u9700\u8981\u66F4\u6539\u9879\u76EE\u7684\u76EE\u6807\u6846\u67B6",
+      "severity": "Mandatory",
+      "effort": 1,
+      "links": [
+        {
+          "title": "\u4ECE .NET Framework \u79FB\u690D\u5230 .NET \u7684\u6982\u8FF0",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265227",
+          "isCustom": false
+        },
+        {
+          "title": ".NET \u9879\u76EE SDK",
+          "url": "https://go.microsoft.com/fwlink/?linkid=2265226",
+          "isCustom": false
+        }
+      ]
+    }
+  }
+}

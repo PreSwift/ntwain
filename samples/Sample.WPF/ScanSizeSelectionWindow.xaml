@@ -1,0 +1,48 @@
+<Window x:Class="Sample.WPF.ScanSizeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选择扫描尺寸"
+        Height="400"
+        Width="380"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="请选择本次扫描的纸张尺寸："
+                   Margin="0,0,0,12"
+                   FontSize="14"/>
+
+        <StackPanel Grid.Row="1">
+            <RadioButton x:Name="SizeAuto" GroupName="ScanSize" Margin="0,4"
+                         Content="自动检测（由扫描仪判断纸张大小）"/>
+            <RadioButton x:Name="SizeA3" GroupName="ScanSize" Margin="0,4"
+                         Content="A3（297 × 420 mm）"/>
+            <RadioButton x:Name="SizeA4" GroupName="ScanSize" Margin="0,4"
+                         Content="A4（210 × 297 mm）"/>
+            <RadioButton x:Name="SizeA4L" GroupName="ScanSize" Margin="0,4"
+                         Content="A4L（297 × 210 mm，横向 A4）"/>
+            <RadioButton x:Name="Size8K" GroupName="ScanSize" Margin="0,4"
+                         Content="8K（260 × 370 mm）"/>
+            <RadioButton x:Name="Size16K" GroupName="ScanSize" Margin="0,4"
+                         Content="16K（195 × 270 mm）"/>
+            <RadioButton x:Name="Size16KL" GroupName="ScanSize" Margin="0,4"
+                         Content="16KL（270 × 195 mm，横向 16K）"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0">
+            <Button Content="确定" Width="80" Margin="0,0,8,0" IsDefault="True"
+                    Click="Ok_Click"/>
+            <Button Content="取消" Width="80" IsCancel="True"
+                    Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

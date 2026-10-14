@@ -1,0 +1,9 @@
+问题 ID,说明,状态,严重性,故事点,项目路径,位置种类,路径,折线图,列,事件 ID,帮助链接,程序集名称,程序集版本,程序集公钥,片段
+NuGet.0001,NuGet 包不兼容,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,CommonServiceLocator 1.3,,,,,"CommonServiceLocator, 1.3  建议:  CommonServiceLocator, 2.0.7"
+NuGet.0001,NuGet 包不兼容,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,ModernWpf 2.0.0-alpha94,,,,,"ModernWpf, 2.0.0-alpha94  建议:  找不到受支持的版本"
+NuGet.0001,NuGet 包不兼容,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,ModernWpf.Core 2.0.0-alpha96,,,,,"ModernWpf.Core, 2.0.0-alpha96  建议:  找不到受支持的版本"
+NuGet.0001,NuGet 包不兼容,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,MvvmLightLibs 5.3.0.0,,,,,"MvvmLightLibs, 5.3.0.0  建议:  找不到受支持的版本"
+NuGet.0001,NuGet 包不兼容,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,NTwain 3.7.5,,,,,"NTwain, 3.7.5  建议:  找不到受支持的版本"
+NuGet.0005,NuGet 包已弃用,Active,Optional,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,MvvmLightLibs 5.3.0.0,,,,,"MvvmLightLibs, 5.3.0.0  建议:  Hi all users! MVVM Light is not maintained anymore. I recommend looking at the CommunityTookit MVVM package. Thank you for all your support during all these years!! - Laurent Remove MvvmLightLibs, and replace with new package CommunityToolkit.Mvvm, 8.4.0"
+Project.0001,项目文件需要转换为 SDK 样式。,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,,,,,,
+Project.0002,需要更改项目的目标框架,Active,Mandatory,1,samples\Sample.WPF\Sample.WPF.csproj,File,samples\Sample.WPF\Sample.WPF.csproj,,,,,,,,"当前目标框架: .NETFramework,Version=v4.8 建议的目标框架: net10.0-windows"
