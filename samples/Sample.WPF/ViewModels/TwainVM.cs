@@ -35,8 +35,6 @@ namespace Sample.WPF
         bool _captureUsesDriverUi;
         volatile int _lastImageWidth;
         volatile int _lastImageHeight;
-        bool _swapDuplexSides;
-        string _pendingSwapPath;
 
         public TwainVM()
         {
@@ -170,7 +168,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261015-back-rotate-90, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261015-a3-k8-landscape, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -186,8 +184,6 @@ namespace Sample.WPF
                             _needCancel = false;
                             _selectedScanPaperSize = selectedSize;
                             _captureUsesDriverUi = ShowUI;
-                            _swapDuplexSides = false;
-                            _pendingSwapPath = null;
                             BeginScanSession(src);
                             var restoredEpsonProfile = !_captureUsesDriverUi
                                 && selectedSize == ScanPaperSize.A4L && IsWfC21000(src)
@@ -218,7 +214,7 @@ namespace Sample.WPF
                                 TryForceFeederScan(src);
                                 TryForceDuplexScan(src);
                                 TryForceScanSize(src, selectedSize);
-                                _swapDuplexSides = TryApplyHuagaoG300NoUi(src);
+                                TryApplyHuagaoG300NoUi(src);
                             }
                             AppLog.Info("Begin duplex state read");
                             _isDuplexScan = IsDuplexActive(src);
@@ -500,12 +496,45 @@ namespace Sample.WPF
         }
 
         /// <summary>
+        /// 自动检测不能沿用上一次的固定纸张。16KL 会把纸张留在 A3，下一次自动检测就会扫出整张 A3。
+        /// </summary>
+        static void TryApplyAutoPaperDetection(DataSource src)
+        {
+            try
+            {
+                var caps = src.Capabilities;
+                var sizes = caps.ICapSupportedSizes;
+                if (sizes.IsSupported && sizes.CanSet)
+                    AppLog.Info("自动检测 SupportedSizes=None: {0}", sizes.SetValue(SupportedSize.None));
+
+                if (caps.ICapAutoSize.IsSupported && caps.ICapAutoSize.CanSet)
+                    AppLog.Info("自动检测 ICapAutoSize=Auto: {0}", caps.ICapAutoSize.SetValue(AutoSize.Auto));
+
+                if (caps.ICapAutomaticBorderDetection.IsSupported && caps.ICapAutomaticBorderDetection.CanSet)
+                    AppLog.Info("自动检测消除黑边=True: {0}", caps.ICapAutomaticBorderDetection.SetValue(BoolType.True));
+
+                if (caps.ICapUndefinedImageSize.IsSupported && caps.ICapUndefinedImageSize.CanSet)
+                    AppLog.Info("自动检测 UndefinedImageSize=True: {0}", caps.ICapUndefinedImageSize.SetValue(BoolType.True));
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("自动检测纸张设置失败: {0}", ex.Message);
+            }
+        }
+
+        /// <summary>
         /// 在 Enable 之前强制扫描尺寸：优先 ICAP_SUPPORTEDSIZES，失败则用 ImageLayout 指定物理区域。
         /// </summary>
         static void TryForceScanSize(DataSource src, ScanPaperSize size)
         {
-            if (src == null || size == ScanPaperSize.Auto)
+            if (src == null)
                 return;
+
+            if (size == ScanPaperSize.Auto)
+            {
+                TryApplyAutoPaperDetection(src);
+                return;
+            }
 
             try
             {
@@ -567,10 +596,10 @@ namespace Sample.WPF
             }
         }
 
-        static bool TryApplyHuagaoG300NoUi(DataSource src)
+        static void TryApplyHuagaoG300NoUi(DataSource src)
         {
             if (!ScannerOrientationHelper.IsHuagaoG300(src))
-                return false;
+                return;
 
             var caps = src.Capabilities;
             var border = caps.ICapAutomaticBorderDetection;
@@ -588,9 +617,6 @@ namespace Sample.WPF
             }
             else
                 AppLog.Info("G300 不支持设置 ICAP_ROTATION");
-
-            AppLog.Info("G300 交换正反面=打开，背面先输出");
-            return true;
         }
 
         /// <summary>
@@ -913,8 +939,14 @@ namespace Sample.WPF
             float width = dims.WidthMm / 25.4f;
             float height = dims.HeightMm / 25.4f;
             var sizes = src.Capabilities.ICapSupportedSizes;
-            if (sizes.IsSupported && sizes.CanSet && !GetTwainSupportedSize(size).HasValue)
-                AppLog.Info("Konica {0}: SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
+            if (sizes.IsSupported && sizes.CanSet)
+            {
+                var twainSize = GetTwainSupportedSize(size);
+                if (twainSize.HasValue)
+                    AppLog.Info("Konica {0}: SupportedSizes={1}: {2}", label, twainSize.Value, sizes.SetValue(twainSize.Value));
+                else
+                    AppLog.Info("Konica {0}: SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
+            }
 
             var frame = new TWFrame { Left = 0, Top = 0, Right = width, Bottom = height };
             TWImageLayout layout;
@@ -1451,8 +1483,6 @@ namespace Sample.WPF
             {
                 var sheet = (transferIndex + 1) / 2;
                 var side = (transferIndex % 2 == 1) ? "A" : "B";
-                if (_swapDuplexSides)
-                    side = side == "A" ? "B" : "A";
                 fileName = string.Format("{0}-{1}", sheet, side);
             }
             else
@@ -1526,24 +1556,12 @@ namespace Sample.WPF
 
                 savedPath = ScanImageRotationHelper.EnsureJpeg(savedPath);
                 if (!_captureUsesDriverUi)
+                {
                     ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
+                    ScanImageRotationHelper.TryAlignOrientationToPaperSize(savedPath, _selectedScanPaperSize);
+                }
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);
-                if (_swapDuplexSides && _isDuplexScan)
-                {
-                    if (_pendingSwapPath == null)
-                    {
-                        _pendingSwapPath = savedPath;
-                        return;
-                    }
-                    var backPath = savedPath;
-                    var frontPath = _pendingSwapPath;
-                    _pendingSwapPath = null;
-                    QueueScanItem(backPath);
-                    QueueScanItem(frontPath);
-                    AppLog.Info("G300 交换正反面: 先输出 {0}，再输出 {1}", Path.GetFileName(backPath), Path.GetFileName(frontPath));
-                    return;
-                }
                 QueueScanItem(savedPath);
             }
             catch (Exception ex)

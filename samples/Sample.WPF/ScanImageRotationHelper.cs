@@ -19,19 +19,6 @@ namespace Sample.WPF
 
         static bool NeedsFrontBackRotation(ScanPaperSize size, DataSource src)
         {
-            if (size == ScanPaperSize.A3 || size == ScanPaperSize.K8)
-            {
-                if (src == null)
-                    return false;
-                // 柯尼卡 A3 传回的已是横向图。爱普生要先转 270/90 才变成这样，这里再转会把文字转竖。
-                if (size == ScanPaperSize.A3 && ScannerOrientationHelper.IsKonica(src))
-                    return false;
-                var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
-                return info.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0
-                    || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0
-                    || ScannerOrientationHelper.IsKonica(src);
-            }
-
             return RequiresPostRotation(size)
                 && ScannerOrientationHelper.ShouldInvertOrientation(src)
                 && !ScannerOrientationHelper.IsHuagaoG300(src);
@@ -53,14 +40,12 @@ namespace Sample.WPF
             if (selectedSize == ScanPaperSize.Auto)
             {
                 string matchDetail;
-                if (!NeedsAutoFrontBackRotation(path, src, out matchDetail))
+                if (!NeedsAutoFrontBackRotation(path, out matchDetail))
                 {
                     AppLog.Info("自动检测未旋转 {0}：{1}", Path.GetFileName(path), matchDetail);
                     return false;
                 }
                 var side = GetSideFromFileName(path);
-                if (ScannerOrientationHelper.IsHuagaoG300(src))
-                    side = side == "B" ? "A" : "B";
                 flip = side == "B"
                     ? RotateFlipType.Rotate90FlipNone
                     : RotateFlipType.Rotate270FlipNone;
@@ -133,6 +118,51 @@ namespace Sample.WPF
             catch (Exception ex)
             {
                 AppLog.Info("旋转扫描图失败: {0}, {1}", path, ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 指定纸张时，横竖与纸张定义不一致就转正。正面 270°，背面 90°。
+        /// </summary>
+        public static bool TryAlignOrientationToPaperSize(string path, ScanPaperSize size)
+        {
+            if (size == ScanPaperSize.Auto || string.IsNullOrEmpty(path) || !File.Exists(path))
+                return false;
+
+            var dims = size.GetDimensionsMm();
+            var expectLandscape = dims.WidthMm > dims.HeightMm
+                || size == ScanPaperSize.A3
+                || size == ScanPaperSize.K8;
+            try
+            {
+                using (var bmp = new Bitmap(path))
+                {
+                    var imageLandscape = bmp.Width > bmp.Height;
+                    if (imageLandscape == expectLandscape)
+                        return false;
+                    var originalWidth = bmp.Width;
+                    var originalHeight = bmp.Height;
+                    var side = GetSideFromFileName(path);
+                    var flip = side == "B"
+                        ? RotateFlipType.Rotate90FlipNone
+                        : RotateFlipType.Rotate270FlipNone;
+                    var tempPath = path + ".tmp";
+                    bmp.RotateFlip(flip);
+                    SaveJpeg(bmp, tempPath);
+                    File.Replace(tempPath, path, null);
+                    AppLog.Info("指定尺寸方向不符，已旋转 {0}：期望{1}，原图{2}x{3}，{4}",
+                        Path.GetFileName(path),
+                        expectLandscape ? "横向" : "纵向",
+                        originalWidth,
+                        originalHeight,
+                        side == "B" ? "B 面顺时针 90" : "A 面顺时针 270");
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("按纸张方向旋转失败: {0}, {1}", path, ex.Message);
                 return false;
             }
         }
@@ -220,10 +250,9 @@ namespace Sample.WPF
         }
 
         /// <summary>
-        /// 爱普生自动检测的 A4/16K 两种放法都是侧着传回的，都要转。
-        /// 柯尼卡横放已经是横图，竖放已经是竖图，不再转。
+        /// 所有扫描仪与爱普生相同：A4/16K 横竖都转，竖版 A3/8K 转，横版 A3/8K 不转。
         /// </summary>
-        static bool NeedsAutoFrontBackRotation(string path, DataSource src, out string detail)
+        static bool NeedsAutoFrontBackRotation(string path, out string detail)
         {
             using (var bmp = new Bitmap(path))
             {
@@ -239,26 +268,14 @@ namespace Sample.WPF
                     return false;
                 }
 
-                var a4Family = matched == "A4" || matched == "A4L" || matched == "16K" || matched == "16KL";
-                if (a4Family && IsEpson(src))
+                if (matched == "A4" || matched == "A4L" || matched == "16K" || matched == "16KL")
                     rotate = true;
-                if (a4Family && ScannerOrientationHelper.IsKonica(src) && (matched == "A4L" || matched == "16KL"))
-                    rotate = false;
 
                 var widthMm = bmp.Width / dpiX * 25.4f;
                 var heightMm = bmp.Height / dpiY * 25.4f;
                 detail = string.Format("判定为{0} {1:0}x{2:0}mm", matched, widthMm, heightMm);
                 return rotate;
             }
-        }
-
-        static bool IsEpson(DataSource src)
-        {
-            if (src == null)
-                return false;
-            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
-            return info.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0
-                || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         static bool TryClassifyAutoSize(int widthPx, int heightPx, float reportedDpiX, float reportedDpiY,
