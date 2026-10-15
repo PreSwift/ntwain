@@ -50,7 +50,23 @@ namespace Sample.WPF
 
             RotateFlipType flip;
             string reason;
-            if (ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(src, selectedSize))
+            if (selectedSize == ScanPaperSize.Auto)
+            {
+                string matchDetail;
+                if (!NeedsAutoFrontBackRotation(path, out matchDetail))
+                {
+                    AppLog.Info("自动检测未旋转 {0}：{1}", Path.GetFileName(path), matchDetail);
+                    return false;
+                }
+                var side = GetSideFromFileName(path);
+                if (ScannerOrientationHelper.IsHuagaoG300(src))
+                    side = side == "B" ? "A" : "B";
+                flip = side == "B"
+                    ? RotateFlipType.Rotate90FlipNone
+                    : RotateFlipType.Rotate270FlipNone;
+                reason = string.Format("{0}，{1}", matchDetail, side == "B" ? "B 面顺时针 90" : "A 面顺时针 270");
+            }
+            else if (ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(src, selectedSize))
             {
                 flip = RotateFlipType.Rotate270FlipNone;
                 reason = "WF-C21000: Rot0 landscape capture to portrait";
@@ -192,6 +208,136 @@ namespace Sample.WPF
             quality.Param[0] = new System.Drawing.Imaging.EncoderParameter(
                 System.Drawing.Imaging.Encoder.Quality, 100L);
             bmp.Save(path, encoder, quality);
+        }
+
+        /// <summary>
+        /// A3/8K 只在竖版时旋转。A4/16K 无论横竖都旋转：爱普生自动检测会把竖版 A4/16K 以横向尺寸传回。
+        /// 横版 A3/8K 已经是目标方向，不再转。
+        /// </summary>
+        static bool NeedsAutoFrontBackRotation(string path, out string detail)
+        {
+            using (var bmp = new Bitmap(path))
+            {
+                string matched;
+                bool rotate;
+                float dpiX;
+                float dpiY;
+                if (!TryClassifyAutoSize(bmp.Width, bmp.Height, bmp.HorizontalResolution, bmp.VerticalResolution,
+                    out matched, out rotate, out dpiX, out dpiY))
+                {
+                    detail = string.Format("{0}x{1}px @{2:0.#}x{3:0.#}dpi 对不上 A3/8K/A4/16K",
+                        bmp.Width, bmp.Height, bmp.HorizontalResolution, bmp.VerticalResolution);
+                    return false;
+                }
+
+                var widthMm = bmp.Width / dpiX * 25.4f;
+                var heightMm = bmp.Height / dpiY * 25.4f;
+                detail = string.Format("判定为{0} {1:0}x{2:0}mm", matched, widthMm, heightMm);
+                return rotate;
+            }
+        }
+
+        static bool TryClassifyAutoSize(int widthPx, int heightPx, float reportedDpiX, float reportedDpiY,
+            out string matched, out bool rotate, out float usedDpiX, out float usedDpiY)
+        {
+            matched = null;
+            rotate = false;
+            usedDpiX = reportedDpiX;
+            usedDpiY = reportedDpiY;
+
+            float[] candidateX;
+            float[] candidateY;
+            if (reportedDpiX > 1f && reportedDpiY > 1f && !LooksLikeDefaultScreenDpi(widthPx, heightPx, reportedDpiX, reportedDpiY))
+            {
+                candidateX = new[] { reportedDpiX };
+                candidateY = new[] { reportedDpiY };
+            }
+            else
+            {
+                candidateX = new[] { 300f, 200f, 150f, 600f };
+                candidateY = candidateX;
+            }
+
+            var bestError = float.MaxValue;
+            for (var i = 0; i < candidateX.Length; i++)
+            {
+                var dpiX = candidateX[i];
+                var dpiY = candidateY[i];
+                var widthMm = widthPx / dpiX * 25.4f;
+                var heightMm = heightPx / dpiY * 25.4f;
+                string name;
+                bool shouldRotate;
+                float error;
+                if (!TryMatchPaperMm(widthMm, heightMm, out name, out shouldRotate, out error))
+                    continue;
+                if (error >= bestError)
+                    continue;
+                bestError = error;
+                matched = name;
+                rotate = shouldRotate;
+                usedDpiX = dpiX;
+                usedDpiY = dpiY;
+            }
+
+            return matched != null;
+        }
+
+        static bool LooksLikeDefaultScreenDpi(int widthPx, int heightPx, float dpiX, float dpiY)
+        {
+            var longPx = Math.Max(widthPx, heightPx);
+            return Math.Abs(dpiX - 96f) < 1f && Math.Abs(dpiY - 96f) < 1f && longPx > 1600;
+        }
+
+        static bool TryMatchPaperMm(float widthMm, float heightMm, out string name, out bool rotate, out float error)
+        {
+            // 横版 A3/8K 与爱普生旋转后、柯尼卡直接传回的方向一致，不再转。
+            // A4L/16KL 是竖版 A4/16K 的常见传回方向，仍要转。
+            var templates = new[]
+            {
+                new PaperTemplate("A3", 297f, 420f, true),
+                new PaperTemplate("8K", 260f, 370f, true),
+                new PaperTemplate("A4", 210f, 297f, true),
+                new PaperTemplate("16K", 195f, 270f, true),
+                new PaperTemplate("A3横", 420f, 297f, false),
+                new PaperTemplate("8K横", 370f, 260f, false),
+                new PaperTemplate("A4L", 297f, 210f, true),
+                new PaperTemplate("16KL", 270f, 195f, true)
+            };
+
+            name = null;
+            rotate = false;
+            error = float.MaxValue;
+            foreach (var template in templates)
+            {
+                var widthError = Math.Abs(widthMm - template.WidthMm) / template.WidthMm;
+                var heightError = Math.Abs(heightMm - template.HeightMm) / template.HeightMm;
+                if (widthError > 0.12f || heightError > 0.12f)
+                    continue;
+                var total = widthError + heightError;
+                if (total >= error)
+                    continue;
+                error = total;
+                name = template.Name;
+                rotate = template.Rotate;
+            }
+
+            return name != null;
+        }
+
+        struct PaperTemplate
+        {
+            public PaperTemplate(string name, float widthMm, float heightMm, bool rotate)
+            {
+                Name = name;
+                WidthMm = widthMm;
+                HeightMm = heightMm;
+                Rotate = rotate;
+            }
+
+            public string Name;
+            public float WidthMm;
+            public float HeightMm;
+            public bool Rotate;
         }
 
         static string GetSideFromFileName(string path)
