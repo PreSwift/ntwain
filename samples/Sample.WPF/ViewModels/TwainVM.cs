@@ -35,6 +35,8 @@ namespace Sample.WPF
         bool _captureUsesDriverUi;
         volatile int _lastImageWidth;
         volatile int _lastImageHeight;
+        bool _swapDuplexSides;
+        string _pendingSwapPath;
 
         public TwainVM()
         {
@@ -168,7 +170,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261014-epson-a3-8k-rotate, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261015-g300-rotation-180, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -184,6 +186,8 @@ namespace Sample.WPF
                             _needCancel = false;
                             _selectedScanPaperSize = selectedSize;
                             _captureUsesDriverUi = ShowUI;
+                            _swapDuplexSides = false;
+                            _pendingSwapPath = null;
                             BeginScanSession(src);
                             var restoredEpsonProfile = !_captureUsesDriverUi
                                 && selectedSize == ScanPaperSize.A4L && IsWfC21000(src)
@@ -193,12 +197,20 @@ namespace Sample.WPF
                             if (_captureUsesDriverUi)
                             {
                                 AppLog.Info("驱动 UI 对照扫描：由驱动选择进纸、单双面和扫描区域；结束后记录实际参数");
+                                _capSnapshot = ReadCapCurrents(src);
+                                AppLog.Info("已记录界面打开前的能力当前值，共 {0} 项", _capSnapshot.Count);
                             }
                             else if (IsEpsonFullAreaLandscape(src, selectedSize))
                             {
                                 if (!restoredEpsonProfile)
                                     TryForceFeederScan(src);
                                 TryApplyEpsonA4LFullArea(src);
+                            }
+                            else if (IsKonicaFullAreaLandscape(src, selectedSize))
+                            {
+                                TryForceFeederScan(src);
+                                TryForceDuplexScan(src);
+                                TryApplyKonicaLandscapeFullArea(src);
                             }
                             else if (!restoredEpsonProfile)
                             {
@@ -208,6 +220,7 @@ namespace Sample.WPF
                                 else
                                     TryForceDuplexScan(src);
                                 TryForceScanSize(src, selectedSize);
+                                _swapDuplexSides = TryApplyHuagaoG300NoUi(src);
                             }
                             AppLog.Info("Begin duplex state read");
                             _isDuplexScan = IsDuplexActive(src);
@@ -521,6 +534,12 @@ namespace Sample.WPF
                     return;
                 }
 
+                if (ScannerOrientationHelper.IsKonica(src))
+                {
+                    TryApplyKonicaPaperFrame(src, applySize, label);
+                    return;
+                }
+
                 SupportedSize? twainSize = GetTwainSupportedSize(applySize);
                 if (twainSize.HasValue)
                 {
@@ -548,6 +567,32 @@ namespace Sample.WPF
             {
                 AppLog.Info("强制 {0} 扫描尺寸失败: {1}", size.GetDisplayName(), ex.Message);
             }
+        }
+
+        static bool TryApplyHuagaoG300NoUi(DataSource src)
+        {
+            if (!ScannerOrientationHelper.IsHuagaoG300(src))
+                return false;
+
+            var caps = src.Capabilities;
+            var border = caps.ICapAutomaticBorderDetection;
+            if (border.IsSupported && border.CanSet)
+                AppLog.Info("G300 消除黑框=True: {0}", border.SetValue(BoolType.True));
+            else
+                AppLog.Info("G300 不支持设置消除黑框");
+
+            var rotation = caps.ICapRotation;
+            if (rotation.IsSupported && rotation.CanSet)
+            {
+                var rc = rotation.SetValue((TWFix32)180f);
+                var current = rotation.CanGetCurrent ? rotation.GetCurrent().ToString() : "?";
+                AppLog.Info("G300 ICAP_ROTATION=180: {0}, 当前={1}", rc, current);
+            }
+            else
+                AppLog.Info("G300 不支持设置 ICAP_ROTATION");
+
+            AppLog.Info("G300 交换正反面=打开，背面先输出");
+            return true;
         }
 
         /// <summary>
@@ -873,6 +918,52 @@ namespace Sample.WPF
             }
         }
 
+        static bool IsKonicaFullAreaLandscape(DataSource src, ScanPaperSize size)
+        {
+            return ScannerOrientationHelper.IsKonica(src)
+                && (size == ScanPaperSize.A4L || size == ScanPaperSize.K16L);
+        }
+
+        static void TryApplyKonicaPaperFrame(DataSource src, ScanPaperSize size, string label)
+        {
+            // 驱动回报的物理幅面停在 8.5 x 11 英寸，按它裁会把 8K 收成 A3。
+            // 与爱普生一样按纸张毫米数写扫描区域，不跟这个上限裁。
+            var dims = size.GetDimensionsMm();
+            float width = dims.WidthMm / 25.4f;
+            float height = dims.HeightMm / 25.4f;
+            var sizes = src.Capabilities.ICapSupportedSizes;
+            if (sizes.IsSupported && sizes.CanSet && !GetTwainSupportedSize(size).HasValue)
+                AppLog.Info("Konica {0}: SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
+
+            var frame = new TWFrame { Left = 0, Top = 0, Right = width, Bottom = height };
+            TWImageLayout layout;
+            src.DGImage.ImageLayout.Get(out layout);
+            layout.Frame = frame;
+            AppLog.Info("Konica {0} ImageLayout Inches: {1}, Frame={2}", label, src.DGImage.ImageLayout.Set(layout), frame);
+            var frames = src.Capabilities.ICapFrames;
+            if (frames.IsSupported && frames.CanSet)
+                AppLog.Info("Konica {0} ICapFrames: {1}", label, frames.SetValue(frame));
+        }
+
+        static void TryApplyKonicaLandscapeFullArea(DataSource src)
+        {
+            try
+            {
+                AppLog.Info("Konica landscape: acquire full area before cropping");
+                var sizes = src.Capabilities.ICapSupportedSizes;
+                if (sizes.IsSupported && sizes.CanSet)
+                    AppLog.Info("Full-area SupportedSizes=A3: {0}", sizes.SetValue(SupportedSize.A3));
+                var orientation = src.Capabilities.ICapOrientation;
+                if (orientation.IsSupported && orientation.CanSet)
+                    AppLog.Info("Full-area Orientation=Rot0: {0}", orientation.SetValue(OrientationType.Rot0));
+                TWImageLayout layout;
+                src.DGImage.ImageLayout.Get(out layout);
+                layout.Frame = new TWFrame { Left = 0, Top = 0, Right = 11.69f, Bottom = 17f };
+                AppLog.Info("Full-area ImageLayout={0}: {1}", layout.Frame, src.DGImage.ImageLayout.Set(layout));
+            }
+            catch (Exception ex) { AppLog.Info("Konica full-area configuration failed: {0}", ex); }
+        }
+
         static void TryApplyEpsonA4LFullArea(DataSource src)
         {
             try
@@ -1142,6 +1233,72 @@ namespace Sample.WPF
             return units.CanGetCurrent ? units.GetCurrent() : Unit.Inches;
         }
 
+        Dictionary<int, string> _capSnapshot;
+
+        [System.Runtime.ExceptionServices.HandleProcessCorruptedStateExceptions]
+        static Dictionary<int, string> ReadCapCurrents(DataSource src)
+        {
+            var map = new Dictionary<int, string>();
+            foreach (var id in src.Capabilities.CapSupportedCaps.GetValues())
+            {
+                var key = (int)id;
+                if (key >= 0x8000)
+                {
+                    map[key] = "<跳过自定义能力，避免驱动卡死>";
+                    continue;
+                }
+                var support = src.Capabilities.QuerySupport(id);
+                if ((support & QuerySupports.GetCurrent) == 0)
+                {
+                    map[key] = "<不支持读取当前值>";
+                    continue;
+                }
+                AppLog.Info("读取能力 0x{0:X4}", key);
+                try
+                {
+                    var value = src.Capabilities.GetCurrent(id);
+                    map[key] = value == null ? "<null>" : value.ToString();
+                }
+                catch (Exception ex)
+                {
+                    map[key] = "读取失败: " + ex.GetType().Name;
+                    AppLog.Info("读取能力 0x{0:X4} 失败并停止后续读取: {1}", key, ex.GetType().Name);
+                    break;
+                }
+            }
+            return map;
+        }
+
+        void LogCapChanges(DataSource src)
+        {
+            var after = ReadCapCurrents(src);
+            if (_capSnapshot == null)
+            {
+                AppLog.Info("没有界面打开前的能力快照，无法对比");
+                return;
+            }
+            var changed = 0;
+            foreach (var pair in after)
+            {
+                string before;
+                var name = Enum.IsDefined(typeof(CapabilityId), (ushort)pair.Key)
+                    ? ((CapabilityId)(ushort)pair.Key).ToString()
+                    : "自定义";
+                if (!_capSnapshot.TryGetValue(pair.Key, out before))
+                {
+                    changed++;
+                    AppLog.Info("能力新增 0x{0:X4} {1} = {2}", pair.Key, name, pair.Value);
+                }
+                else if (before != pair.Value)
+                {
+                    changed++;
+                    AppLog.Info("能力变化 0x{0:X4} {1}: {2} -> {3}", pair.Key, name, before, pair.Value);
+                }
+            }
+            AppLog.Info("能力对比结束，变化 {0} 项", changed);
+            _capSnapshot = null;
+        }
+
         static void TrySetCap<T>(ICapWrapper<T> cap, T value)
         {
             if (cap != null && cap.IsSupported && cap.CanSet)
@@ -1176,6 +1333,7 @@ namespace Sample.WPF
                         if (_session.State == 4 && _session.CurrentSource != null)
                         {
                             LogScanGeometry(_session.CurrentSource);
+                            LogCapChanges(_session.CurrentSource);
                             TrySaveEpsonA4LSettings(_session.CurrentSource);
                         }
                         else
@@ -1312,6 +1470,8 @@ namespace Sample.WPF
             {
                 var sheet = (transferIndex + 1) / 2;
                 var side = (transferIndex % 2 == 1) ? "A" : "B";
+                if (_swapDuplexSides)
+                    side = side == "A" ? "B" : "A";
                 fileName = string.Format("{0}-{1}", sheet, side);
             }
             else
@@ -1388,6 +1548,21 @@ namespace Sample.WPF
                     ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);
+                if (_swapDuplexSides && _isDuplexScan)
+                {
+                    if (_pendingSwapPath == null)
+                    {
+                        _pendingSwapPath = savedPath;
+                        return;
+                    }
+                    var backPath = savedPath;
+                    var frontPath = _pendingSwapPath;
+                    _pendingSwapPath = null;
+                    QueueScanItem(backPath);
+                    QueueScanItem(frontPath);
+                    AppLog.Info("G300 交换正反面: 先输出 {0}，再输出 {1}", Path.GetFileName(backPath), Path.GetFileName(frontPath));
+                    return;
+                }
                 QueueScanItem(savedPath);
             }
             catch (Exception ex)

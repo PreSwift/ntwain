@@ -23,12 +23,18 @@ namespace Sample.WPF
             {
                 if (src == null)
                     return false;
+                // 柯尼卡 A3 传回的已是横向图。爱普生要先转 270/90 才变成这样，这里再转会把文字转竖。
+                if (size == ScanPaperSize.A3 && ScannerOrientationHelper.IsKonica(src))
+                    return false;
                 var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
                 return info.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0
-                    || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0;
+                    || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0
+                    || ScannerOrientationHelper.IsKonica(src);
             }
 
-            return RequiresPostRotation(size) && ScannerOrientationHelper.ShouldInvertOrientation(src);
+            return RequiresPostRotation(size)
+                && ScannerOrientationHelper.ShouldInvertOrientation(src)
+                && !ScannerOrientationHelper.IsHuagaoG300(src);
         }
 
         public static bool TryRotateSavedImage(string path, ScanPaperSize selectedSize, DataSource src)
@@ -37,8 +43,9 @@ namespace Sample.WPF
                 return false;
 
             if ((selectedSize == ScanPaperSize.A4L || selectedSize == ScanPaperSize.K16L) && src != null
-                && src.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
-                && src.Manufacturer.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0)
+                && ((src.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
+                    && src.Manufacturer.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0)
+                    || ScannerOrientationHelper.IsKonica(src)))
                 return TryCropEpsonA4LFullArea(path, selectedSize);
 
             RotateFlipType flip;

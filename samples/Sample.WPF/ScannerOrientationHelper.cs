@@ -15,6 +15,25 @@ namespace Sample.WPF
                 && src.Manufacturer.IndexOf("EPSON", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        public static bool IsKonica(DataSource src)
+        {
+            if (src == null)
+                return false;
+            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+            return info.IndexOf("KONICA", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("MINOLTA", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("柯尼卡", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("美能达", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool IsHuagaoG300(DataSource src)
+        {
+            if (src == null)
+                return false;
+            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+            return info.IndexOf("G300", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         public static bool ShouldInvertOrientation(DataSource src)
         {
             if (src == null)
