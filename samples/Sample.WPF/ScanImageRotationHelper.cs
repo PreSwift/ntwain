@@ -53,7 +53,7 @@ namespace Sample.WPF
             if (selectedSize == ScanPaperSize.Auto)
             {
                 string matchDetail;
-                if (!NeedsAutoFrontBackRotation(path, out matchDetail))
+                if (!NeedsAutoFrontBackRotation(path, src, out matchDetail))
                 {
                     AppLog.Info("自动检测未旋转 {0}：{1}", Path.GetFileName(path), matchDetail);
                     return false;
@@ -211,10 +211,10 @@ namespace Sample.WPF
         }
 
         /// <summary>
-        /// A3/8K 只在竖版时旋转。A4/16K 无论横竖都旋转：爱普生自动检测会把竖版 A4/16K 以横向尺寸传回。
-        /// 横版 A3/8K 已经是目标方向，不再转。
+        /// 爱普生自动检测的 A4/16K 两种放法都是侧着传回的，都要转。
+        /// 柯尼卡横放已经是横图，竖放已经是竖图，不再转。
         /// </summary>
-        static bool NeedsAutoFrontBackRotation(string path, out string detail)
+        static bool NeedsAutoFrontBackRotation(string path, DataSource src, out string detail)
         {
             using (var bmp = new Bitmap(path))
             {
@@ -230,11 +230,26 @@ namespace Sample.WPF
                     return false;
                 }
 
+                var a4Family = matched == "A4" || matched == "A4L" || matched == "16K" || matched == "16KL";
+                if (a4Family && IsEpson(src))
+                    rotate = true;
+                if (a4Family && ScannerOrientationHelper.IsKonica(src) && (matched == "A4L" || matched == "16KL"))
+                    rotate = false;
+
                 var widthMm = bmp.Width / dpiX * 25.4f;
                 var heightMm = bmp.Height / dpiY * 25.4f;
                 detail = string.Format("判定为{0} {1:0}x{2:0}mm", matched, widthMm, heightMm);
                 return rotate;
             }
+        }
+
+        static bool IsEpson(DataSource src)
+        {
+            if (src == null)
+                return false;
+            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+            return info.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("爱普生", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         static bool TryClassifyAutoSize(int widthPx, int heightPx, float reportedDpiX, float reportedDpiY,
@@ -290,14 +305,14 @@ namespace Sample.WPF
 
         static bool TryMatchPaperMm(float widthMm, float heightMm, out string name, out bool rotate, out float error)
         {
-            // 横版 A3/8K 与爱普生旋转后、柯尼卡直接传回的方向一致，不再转。
-            // A4L/16KL 是竖版 A4/16K 的常见传回方向，仍要转。
+            // 柯尼卡竖放 A4/16K 传回的已是竖图，再转会把文字放横。
+            // 爱普生自动检测会把同一张纸以 A4L/16KL 横向尺寸传回，那种才要转。
             var templates = new[]
             {
                 new PaperTemplate("A3", 297f, 420f, true),
                 new PaperTemplate("8K", 260f, 370f, true),
-                new PaperTemplate("A4", 210f, 297f, true),
-                new PaperTemplate("16K", 195f, 270f, true),
+                new PaperTemplate("A4", 210f, 297f, false),
+                new PaperTemplate("16K", 195f, 270f, false),
                 new PaperTemplate("A3横", 420f, 297f, false),
                 new PaperTemplate("8K横", 370f, 260f, false),
                 new PaperTemplate("A4L", 297f, 210f, true),
