@@ -170,7 +170,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261015-epson-a4-both-ways, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261015-a4l-duplex, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -205,6 +205,7 @@ namespace Sample.WPF
                                 if (!restoredEpsonProfile)
                                     TryForceFeederScan(src);
                                 TryApplyEpsonA4LFullArea(src);
+                                TryForceDuplexScan(src);
                             }
                             else if (IsKonicaFullAreaLandscape(src, selectedSize))
                             {
@@ -215,10 +216,7 @@ namespace Sample.WPF
                             else if (!restoredEpsonProfile)
                             {
                                 TryForceFeederScan(src);
-                                if (selectedSize == ScanPaperSize.A4L && IsWfC21000(src))
-                                    TrySetEpsonA4LSimplex(src);
-                                else
-                                    TryForceDuplexScan(src);
+                                TryForceDuplexScan(src);
                                 TryForceScanSize(src, selectedSize);
                                 _swapDuplexSides = TryApplyHuagaoG300NoUi(src);
                             }
@@ -675,23 +673,6 @@ namespace Sample.WPF
             {
                 AppLog.Info("强制双面扫描失败: {0}", ex.Message);
             }
-        }
-
-        static void TrySetEpsonA4LSimplex(DataSource src)
-        {
-            try
-            {
-                var duplex = src.Capabilities.CapDuplexEnabled;
-                if (!duplex.IsSupported || !duplex.CanSet)
-                    return;
-                if (duplex.CanGetCurrent && duplex.GetCurrent() == BoolType.False)
-                {
-                    AppLog.Info("WF-C21000 A4L: duplex already disabled, matching driver UI");
-                    return;
-                }
-                AppLog.Info("WF-C21000 A4L: disable duplex to match driver UI: {0}", duplex.SetValue(BoolType.False));
-            }
-            catch (Exception ex) { AppLog.Info("WF-C21000 A4L duplex configuration failed: {0}", ex.Message); }
         }
 
         static void TryApplyScanOrientation(DataSource src, ScanPaperSize size)
