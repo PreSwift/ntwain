@@ -68,8 +68,13 @@ namespace Sample.WPF
             }
             else if (ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(src, selectedSize))
             {
-                flip = RotateFlipType.Rotate270FlipNone;
-                reason = "WF-C21000: Rot0 landscape capture to portrait";
+                var side = GetSideFromFileName(path);
+                flip = side == "B"
+                    ? RotateFlipType.Rotate90FlipNone
+                    : RotateFlipType.Rotate270FlipNone;
+                reason = side == "B"
+                    ? "WF-C21000 B 面顺时针 90"
+                    : "WF-C21000 A 面顺时针 270";
             }
             else if (NeedsFrontBackRotation(selectedSize, src))
             {
@@ -158,12 +163,16 @@ namespace Sample.WPF
                     var area = new Rectangle(left, 0, shortPixels, longPixels);
                     using (var page = bmp.Clone(area, bmp.PixelFormat))
                     {
-                        page.RotateFlip(RotateFlipType.Rotate270FlipNone);
+                        var back = GetSideFromFileName(path) == "B";
+                        page.RotateFlip(back
+                            ? RotateFlipType.Rotate90FlipNone
+                            : RotateFlipType.Rotate270FlipNone);
                         page.SetResolution(bmp.HorizontalResolution, bmp.VerticalResolution);
                         SaveJpeg(page, tempPath);
+                        AppLog.Info("WF-C21000 {0}: full-area {1}x{2}, crop={3}, rotate {4} to {5}x{6}",
+                            size.GetDisplayName(), bmp.Width, bmp.Height, area,
+                            back ? 90 : 270, longPixels, shortPixels);
                     }
-                    AppLog.Info("WF-C21000 {0}: full-area {1}x{2}, crop={3}, rotate 270 to {4}x{5}",
-                        size.GetDisplayName(), bmp.Width, bmp.Height, area, longPixels, shortPixels);
                 }
                 File.Replace(tempPath, path, null);
                 return true;

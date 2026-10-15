@@ -170,7 +170,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261015-a4l-duplex, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261015-back-rotate-90, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
