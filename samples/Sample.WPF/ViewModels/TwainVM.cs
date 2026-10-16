@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -200,7 +201,8 @@ namespace Sample.WPF
                 {
                     if (_session.State == 4)
                     {
-                        var rc = _session.CurrentSource.Enable(SourceEnableMode.ShowUIOnly, false, WindowHandle);
+                        var rc = EnableWhileUiPumps(() =>
+                            _session.CurrentSource.Enable(SourceEnableMode.ShowUIOnly, false, WindowHandle));
                         CommandManager.InvalidateRequerySuggested();
                     }
                 }, () =>
@@ -222,7 +224,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261016-huagao-crop-border, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261016-canon-skip-feederloaded, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -270,6 +272,8 @@ namespace Sample.WPF
                                 TryForceScanSize(src, selectedSize);
                                 TryApplyHuagaoG300NoUi(src);
                             }
+                            TryApplyHuagaoG300SwapSides(src);
+                            TryApplyScanResolution(src);
                             AppLog.Info("Begin duplex state read");
                             _isDuplexScan = IsDuplexActive(src);
                             AppLog.Info("End duplex state read: {0}", _isDuplexScan);
@@ -289,7 +293,9 @@ namespace Sample.WPF
                             var mode = ShowUI ? SourceEnableMode.ShowUI : SourceEnableMode.NoUI;
                             AppLog.Info("调用 Enable, mode={0}, hwnd=0x{1:X}", mode, WindowHandle.ToInt64());
                             preparationTimer.Restart();
-                            var rc = src.Enable(mode, true, WindowHandle);
+                            var rc = ShowUI
+                                ? EnableWhileUiPumps(() => src.Enable(mode, true, WindowHandle))
+                                : src.Enable(mode, true, WindowHandle);
                             AppLog.Info("驱动 Enable 耗时: {0} ms", preparationTimer.ElapsedMilliseconds);
                             AppLog.Info("Enable 返回 {0}, state={1}", rc, _session.State);
                             if (rc != ReturnCode.Success)
@@ -511,6 +517,52 @@ namespace Sample.WPF
             _hideScanStatusTimer = null;
         }
 
+        /// <summary>
+        /// 佳能等驱动会把界面挂到主窗口上，并等待主窗口处理消息。
+        /// Enable 若直接堵在界面线程上，驱动窗口出不来，程序看起来就像卡住。
+        /// </summary>
+        static ReturnCode EnableWhileUiPumps(Func<ReturnCode> enable)
+        {
+            var dispatcher = Application.Current == null ? null : Application.Current.Dispatcher;
+            if (dispatcher == null || !dispatcher.CheckAccess())
+                return enable();
+
+            ReturnCode rc = ReturnCode.Failure;
+            Exception error = null;
+            using (var done = new ManualResetEvent(false))
+            {
+                var worker = new Thread(() =>
+                {
+                    try
+                    {
+                        rc = enable();
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex;
+                    }
+                    finally
+                    {
+                        done.Set();
+                    }
+                });
+                worker.IsBackground = true;
+                worker.Name = "TWAIN Enable";
+                worker.Start();
+
+                var frame = new DispatcherFrame();
+                ThreadPool.RegisterWaitForSingleObject(done, (state, timedOut) =>
+                {
+                    dispatcher.BeginInvoke(new Action(() => frame.Continue = false));
+                }, null, Timeout.Infinite, true);
+                Dispatcher.PushFrame(frame);
+            }
+
+            if (error != null)
+                ExceptionDispatchInfo.Capture(error).Throw();
+            return rc;
+        }
+
         static void ShowScanMessage(string caption, string message)
         {
             Messenger.Default.Send(new MessageBoxMessage(message, null)
@@ -601,22 +653,19 @@ namespace Sample.WPF
                         src.Name, label, applySize.GetDisplayName());
                 }
 
+                // G100 的 A4 横向在自定义纸张能力里，标准 SupportedSizes 和 ImageLayout 都不会变。
+                if (ScannerOrientationHelper.IsHuagaoG100(src))
+                {
+                    TryApplyHuagaoG100Paper(src, applySize);
+                    return;
+                }
+
                 // 关掉会覆盖固定纸张尺寸的自动检测/裁边。
-                // G100 的物理宽度只有 10 英寸，横向框写不进去；界面扫描只改方向并保持不定尺寸。
-                var g100 = ScannerOrientationHelper.IsHuagaoG100(src);
-                if (g100)
-                {
-                    TrySetCap(caps.ICapUndefinedImageSize, BoolType.True);
-                    AppLog.Info("G100 保持不定图像尺寸，由扫描方向决定出图");
-                }
-                else
-                {
-                    TrySetCap(caps.ICapUndefinedImageSize, BoolType.False);
-                }
+                TrySetCap(caps.ICapUndefinedImageSize, BoolType.False);
                 TrySetCap(caps.ICapAutomaticBorderDetection, BoolType.False);
                 TrySetCap(caps.ICapAutoSize, AutoSize.None);
 
-                if (!IsEpson(src) && !g100)
+                if (!IsEpson(src))
                     TryApplyScanOrientation(src, applySize);
 
                 if (IsEpson(src))
@@ -650,31 +699,230 @@ namespace Sample.WPF
                         }
                     }
                 }
-                else if (g100)
-                {
-                    var sizes = caps.ICapSupportedSizes;
-                    if (sizes.IsSupported && sizes.CanSet)
-                        AppLog.Info("G100 {0} SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
-                    if (caps.ICapAutomaticBorderDetection.IsSupported && caps.ICapAutomaticBorderDetection.CanSet)
-                        AppLog.Info("G100 {0} 消除黑边=True: {1}", label, caps.ICapAutomaticBorderDetection.SetValue(BoolType.True));
-                }
-
-                if (g100)
-                {
-                    TryApplyScanOrientation(src, applySize);
-                    var rotation = caps.ICapRotation;
-                    if (rotation.IsSupported && rotation.CanSet)
-                        AppLog.Info("G100 ICAP_ROTATION=0: {0}", rotation.SetValue((TWFix32)0f));
-                    AppLog.Info("G100 不设置 ImageLayout：物理宽度 10 英寸，横向框会被拒绝");
-                    return;
-                }
-
                 if (TrySetImageLayout(src, applySize))
+                {
                     TryApplyScanOrientation(src, applySize);
+                }
+                else
+                {
+                    AppLog.Info("{0} 扫描区域设置失败，交换宽高与扫描方向后重试", label);
+                    TryApplyScanOrientation(src, applySize, true);
+                    if (!TrySetImageLayout(src, applySize, true))
+                        throw new InvalidOperationException(label + " 两个方向的扫描区域均设置失败，已中止扫描，避免沿用上次纸张尺寸。");
+                    AppLog.Info("{0} 已回退到另一方向扫描", label);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 AppLog.Info("强制 {0} 扫描尺寸失败: {1}", size.GetDisplayName(), ex.Message);
+            }
+        }
+
+        const int HuagaoPaperName = 0x8000 + 2063;
+        const int HuagaoPaperLeft = 0x8000 + 2065;
+        const int HuagaoPaperRight = 0x8000 + 2066;
+        const int HuagaoPaperTop = 0x8000 + 2067;
+        const int HuagaoPaperBottom = 0x8000 + 2068;
+
+        /// <summary>
+        /// 按驱动界面实测：纸张名在自定义 2063，宽高毫米在 2066/2068，方向用 ICAP_ORIENTATION。
+        /// </summary>
+        static void TryApplyHuagaoG100Paper(DataSource src, ScanPaperSize size)
+        {
+            string paperName;
+            float widthMm;
+            float heightMm;
+            switch (size)
+            {
+                case ScanPaperSize.A3:
+                    paperName = "A3";
+                    widthMm = 297f;
+                    heightMm = 420f;
+                    break;
+                case ScanPaperSize.A4:
+                    paperName = "A4";
+                    widthMm = 210f;
+                    heightMm = 297f;
+                    break;
+                case ScanPaperSize.A4L:
+                    paperName = "A4横向";
+                    widthMm = 297f;
+                    heightMm = 210f;
+                    break;
+                case ScanPaperSize.K8:
+                    paperName = "8开";
+                    widthMm = 297f;
+                    heightMm = 420f;
+                    break;
+                case ScanPaperSize.K16:
+                    paperName = "16开";
+                    widthMm = 210f;
+                    heightMm = 285f;
+                    break;
+                case ScanPaperSize.K16L:
+                    paperName = "16开横向";
+                    widthMm = 285f;
+                    heightMm = 210f;
+                    break;
+                default:
+                    paperName = null;
+                    widthMm = 0;
+                    heightMm = 0;
+                    break;
+            }
+
+            var caps = src.Capabilities;
+            TrySetCap(caps.ICapUndefinedImageSize, BoolType.True);
+            TrySetCap(caps.ICapAutomaticBorderDetection, BoolType.True);
+            TrySetCap(caps.ICapAutoSize, AutoSize.None);
+
+            if (paperName != null)
+            {
+                TrySetHuagaoString(src, (CapabilityId)HuagaoPaperName, paperName);
+                TrySetHuagaoFix32(src, (CapabilityId)HuagaoPaperLeft, 0f);
+                TrySetHuagaoFix32(src, (CapabilityId)HuagaoPaperRight, widthMm);
+                TrySetHuagaoFix32(src, (CapabilityId)HuagaoPaperTop, 0f);
+                TrySetHuagaoFix32(src, (CapabilityId)HuagaoPaperBottom, heightMm);
+            }
+
+            TryApplyScanOrientation(src, size);
+            var rotation = caps.ICapRotation;
+            if (rotation.IsSupported && rotation.CanSet)
+                AppLog.Info("G100 ICAP_ROTATION=0: {0}", rotation.SetValue((TWFix32)0f));
+        }
+
+        static void TrySetHuagaoString(DataSource src, CapabilityId id, string value)
+        {
+            try
+            {
+                var raw = src.Capabilities.GetValuesRaw(id);
+                var type = IsStringItem(raw.ItemType) ? raw.ItemType : ItemType.String255;
+                ReturnCode rc;
+                using (var cap = new TWCapability(id, value, type))
+                    rc = src.DGControl.Capability.Set(cap);
+                var current = src.Capabilities.GetCurrent(id);
+                if (current == null || !string.Equals(Convert.ToString(current), value, StringComparison.Ordinal))
+                {
+                    var values = src.Capabilities.GetValues(id).Select(v => Convert.ToString(v)).ToList();
+                    var index = values.FindIndex(v => string.Equals(v, value, StringComparison.Ordinal));
+                    if (index >= 0)
+                    {
+                        using (var cap = new TWCapability(id, new TWOneValue
+                        {
+                            ItemType = ItemType.UInt16,
+                            Item = (uint)index
+                        }))
+                            rc = src.DGControl.Capability.Set(cap);
+                        current = src.Capabilities.GetCurrent(id);
+                    }
+                }
+                AppLog.Info("G100 0x{0:X4}={1}: {2}, 当前={3}", (int)id, value, rc, current);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("G100 设置 {0}={1} 失败: {2}", id, value, ex.Message);
+            }
+        }
+
+        static void TrySetHuagaoFix32(DataSource src, CapabilityId id, float value)
+        {
+            try
+            {
+                var one = ((TWFix32)value).ToOneValue();
+                ReturnCode rc;
+                using (var cap = new TWCapability(id, one))
+                    rc = src.DGControl.Capability.Set(cap);
+                var current = src.Capabilities.GetCurrent(id);
+                AppLog.Info("G100 0x{0:X4}={1}: {2}, 当前={3}", (int)id, value, rc, current);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("G100 设置 {0}={1} 失败: {2}", id, value, ex.Message);
+            }
+        }
+
+        static bool IsStringItem(ItemType type)
+        {
+            return type == ItemType.String32
+                || type == ItemType.String64
+                || type == ItemType.String128
+                || type == ItemType.String255;
+        }
+
+        static void TryApplyScanResolution(DataSource src)
+        {
+            // TWAIN 分辨率以 ICAP_UNITS 为单位。先恢复英寸，确保 200 表示 DPI。
+            // 切换单位只转换区域数值，不改变已设置的物理扫描范围。
+            try
+            {
+                var units = src.Capabilities.ICapUnits;
+                if (units.IsSupported && units.CanSet)
+                    AppLog.Info("扫描分辨率单位 Inches: {0}", units.SetValue(Unit.Inches));
+                if (units.IsSupported && units.CanGetCurrent && units.GetCurrent() != Unit.Inches)
+                {
+                    AppLog.Info("驱动未切换到英寸，跳过 200 DPI 设置，避免按其他单位写入错误分辨率");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("设置扫描分辨率单位失败: {0}", ex.Message);
+                return;
+            }
+            var caps = new[] { src.Capabilities.ICapXResolution, src.Capabilities.ICapYResolution };
+            var names = new[] { "ICapXResolution", "ICapYResolution" };
+            for (var i = 0; i < caps.Length; i++)
+            {
+                try
+                {
+                    var cap = caps[i];
+                    if (!cap.IsSupported || !cap.CanSet)
+                    {
+                        AppLog.Info("当前驱动不支持设置 {0}=200 DPI", names[i]);
+                        continue;
+                    }
+                    var rc = cap.SetValue((TWFix32)200f);
+                    var current = cap.CanGetCurrent ? cap.GetCurrent().ToString() : "?";
+                    AppLog.Info("扫描分辨率 {0}=200 DPI: {1}, 当前={2}", names[i], rc, current);
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Info("设置扫描分辨率 {0}=200 DPI 失败: {1}", names[i], ex.Message);
+                }
+            }
+        }
+
+        static void TryApplyHuagaoG300SwapSides(DataSource src)
+        {
+            if (!ScannerOrientationHelper.IsHuagaoG300(src))
+                return;
+
+            // 两份华高报告中随“交换正反面”变化的私有能力。
+            foreach (var offset in new[] { 148, 2074 })
+            {
+                var id = (CapabilityId)((int)CapabilityId.CustomBase + offset);
+                try
+                {
+                    // 使用驱动报告的类型，避免把整数开关误写为 TW_BOOL。
+                    var raw = src.Capabilities.GetValuesRaw(id);
+                    ReturnCode rc;
+                    using (var cap = new TWCapability(id, new TWOneValue
+                    {
+                        ItemType = raw.ItemType,
+                        Item = 1
+                    }))
+                        rc = src.DGControl.Capability.Set(cap);
+                    AppLog.Info("G300 交换正反面 [CustomBase]+{0} (0x{1:X4})=1: {2}, 当前={3}",
+                        offset, (int)id, rc, src.Capabilities.GetCurrent(id));
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Info("G300 设置交换正反面 [CustomBase]+{0}=1 失败: {1}", offset, ex.Message);
+                }
             }
         }
 
@@ -783,13 +1031,13 @@ namespace Sample.WPF
             }
         }
 
-        static void TryApplyScanOrientation(DataSource src, ScanPaperSize size)
+        static void TryApplyScanOrientation(DataSource src, ScanPaperSize size, bool swapDimensions = false)
         {
             var orientation = src.Capabilities.ICapOrientation;
             if (!orientation.IsSupported || !orientation.CanSet)
                 return;
 
-            var landscape = size.IsLandscape();
+            var landscape = size.IsLandscape() != swapDimensions;
             var available = SafeGetValues(orientation);
             OrientationType? target = null;
 
@@ -1261,9 +1509,11 @@ namespace Sample.WPF
             }
         }
 
-        static bool TrySetImageLayout(DataSource src, ScanPaperSize size)
+        static bool TrySetImageLayout(DataSource src, ScanPaperSize size, bool swapDimensions = false)
         {
             var dims = size.GetDimensionsMm();
+            if (swapDimensions)
+                dims = new ScanPaperDimensions(dims.HeightMm, dims.WidthMm);
             var unit = ResolveLayoutUnit(src.Capabilities.ICapUnits);
             float width;
             float height;
@@ -1285,10 +1535,14 @@ namespace Sample.WPF
 
             var physicalWidth = src.Capabilities.ICapPhysicalWidth;
             var physicalHeight = src.Capabilities.ICapPhysicalHeight;
-            if (physicalWidth.IsSupported)
-                width = Math.Min(width, physicalWidth.GetCurrent());
-            if (physicalHeight.IsSupported)
-                height = Math.Min(height, physicalHeight.GetCurrent());
+            // 不截短请求区域，否则驱动可能返回成功却丢失纸张内容。
+            if ((physicalWidth.IsSupported && width > physicalWidth.GetCurrent() + 0.001f)
+                || (physicalHeight.IsSupported && height > physicalHeight.GetCurrent() + 0.001f))
+            {
+                AppLog.Info("{0} 扫描区域 {1} x {2} ({3}) 超过物理范围，交换宽高={4}",
+                    size.GetDisplayName(), width, height, unit, swapDimensions);
+                return false;
+            }
 
             TWImageLayout layout;
             src.DGImage.ImageLayout.Get(out layout);
@@ -1301,7 +1555,7 @@ namespace Sample.WPF
             };
 
             var rc = src.DGImage.ImageLayout.Set(layout);
-            AppLog.Info("强制扫描尺寸 {0} (ImageLayout {1}): {2}, Frame={3}", size.GetDisplayName(), unit, rc, layout.Frame);
+            AppLog.Info("强制扫描尺寸 {0} (ImageLayout {1}): {2}, Frame={3}, 交换宽高={4}", size.GetDisplayName(), unit, rc, layout.Frame, swapDimensions);
             if (rc != ReturnCode.Success)
                 return false;
 
@@ -1340,6 +1594,13 @@ namespace Sample.WPF
                 if (key >= 0x8000)
                 {
                     map[key] = "<跳过自定义能力，避免驱动卡死>";
+                    continue;
+                }
+                // 佳能 MF750 对 CAP_FEEDERLOADED 的 GetCurrent 会抛 AccessViolation，
+                // 之后同一条 DSM 调用不再返回，界面就停在「Begin duplex state read」。
+                if (key == (int)CapabilityId.CapFeederLoaded)
+                {
+                    map[key] = "<跳过，佳能驱动读取此项会访问冲突并卡死>";
                     continue;
                 }
                 var support = src.Capabilities.QuerySupport(id);

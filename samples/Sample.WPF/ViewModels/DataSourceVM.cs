@@ -216,6 +216,74 @@ namespace Sample.WPF
             }
         }
 
+        static void AppendPaperGeometry(StringBuilder report, DataSource ds)
+        {
+            report.AppendLine("=== 纸张几何（对照驱动界面当前选项）===");
+            var caps = ds.Capabilities;
+            AppendCurrent(report, "ICapSupportedSizes", caps.ICapSupportedSizes);
+            AppendValues(report, "ICapSupportedSizes", caps.ICapSupportedSizes);
+            AppendCurrent(report, "ICapOrientation", caps.ICapOrientation);
+            AppendCurrent(report, "ICapRotation", caps.ICapRotation);
+            AppendCurrent(report, "ICapUnits", caps.ICapUnits);
+            AppendCurrent(report, "ICapFrames", caps.ICapFrames);
+            AppendCurrent(report, "ICapPhysicalWidth", caps.ICapPhysicalWidth);
+            AppendCurrent(report, "ICapPhysicalHeight", caps.ICapPhysicalHeight);
+            AppendCurrent(report, "ICapAutoSize", caps.ICapAutoSize);
+            AppendCurrent(report, "ICapUndefinedImageSize", caps.ICapUndefinedImageSize);
+            AppendCurrent(report, "ICapAutomaticBorderDetection", caps.ICapAutomaticBorderDetection);
+            AppendCurrent(report, "ICapAutomaticRotate", caps.ICapAutomaticRotate);
+            try
+            {
+                TWImageLayout layout;
+                var rc = ds.DGImage.ImageLayout.Get(out layout);
+                report.Append('\t').Append("ImageLayout: ").Append(rc)
+                    .Append(" Frame=").Append(layout.Frame)
+                    .Append(" DocumentNumber=").Append(layout.DocumentNumber)
+                    .Append(" PageNumber=").Append(layout.PageNumber)
+                    .Append(" FrameNumber=").AppendLine(layout.FrameNumber.ToString());
+            }
+            catch (Exception ex)
+            {
+                report.Append('\t').Append("ImageLayout: ").AppendLine(ex.Message);
+            }
+        }
+
+        static void AppendCurrent<T>(StringBuilder report, string name, IReadOnlyCapWrapper<T> cap)
+        {
+            report.Append('\t').Append(name).Append(": ");
+            try
+            {
+                if (!cap.IsSupported)
+                    report.AppendLine("不支持");
+                else if (!cap.CanGetCurrent)
+                    report.AppendLine("不能读当前值");
+                else
+                    report.AppendLine(Convert.ToString(cap.GetCurrent()));
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine(ex.Message);
+            }
+        }
+
+        static void AppendValues<T>(StringBuilder report, string name, IReadOnlyCapWrapper<T> cap)
+        {
+            report.Append('\t').Append(name).Append(" 可选: ");
+            try
+            {
+                if (!cap.IsSupported || !cap.CanGet)
+                {
+                    report.AppendLine("不可枚举");
+                    return;
+                }
+                report.AppendLine(string.Join(", ", cap.GetValues().Select(v => Convert.ToString(v))));
+            }
+            catch (Exception ex)
+            {
+                report.AppendLine(ex.Message);
+            }
+        }
+
         private ICommand _saveCapCommand;
 
         public ICommand SaveCapValuesCommand
@@ -230,7 +298,10 @@ namespace Sample.WPF
                         {
                             StringBuilder report = new StringBuilder();
                             report.Append("Cap values for TWAIN device ").AppendLine(DS.Name);
-                            report.Append("Generated on ").AppendLine(DateTime.Now.ToString("yyyy/MM/dd hh:mm tt")).AppendLine();
+                            report.Append("Manufacturer: ").AppendLine(DS.Manufacturer);
+                            report.Append("Generated on ").AppendLine(DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")).AppendLine();
+                            AppendPaperGeometry(report, DS);
+                            report.AppendLine();
 
                             foreach (CapVM cap in _capView)
                             {
