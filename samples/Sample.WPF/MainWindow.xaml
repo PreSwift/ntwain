@@ -79,7 +79,7 @@
             </ListBox.ItemTemplate>
         </ListBox>
 
-        <StackPanel Orientation="Horizontal" Grid.Column="3" >
+        <WrapPanel Grid.Column="3" >
             <Label Content="State:"></Label>
             <TextBlock Text="{Binding State}"></TextBlock>
             <Button Content="S_ettings" Command="{Binding ShowDriverCommand}"/>
@@ -96,7 +96,11 @@
                     ToolTip="{Binding ScanSaveFolderPath}"></Button>
             <Button Content="查看_日志" Command="{Binding OpenLogCommand}"></Button>
             <Button Content="清理日志" Command="{Binding ClearLogCommand}"></Button>
-        </StackPanel>
+            <CheckBox Content="自动转正" IsChecked="{Binding IsOcrValidationEnabled}"
+                      ToolTip="按整页方向分类自动旋转；不确定时保留原方向。" Margin="4"/>
+            <Button Content="转正图片（副本）" Command="{Binding ValidateOcrFilesCommand}"/>
+            <TextBlock Text="{Binding OrientationProgress}" VerticalAlignment="Center" Margin="4"/>
+        </WrapPanel>
 
         <ListBox Grid.Row="1" Grid.RowSpan="2" Grid.Column="3"
                  ItemsSource="{Binding CapturedImages}">
@@ -108,12 +112,16 @@
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Border Padding="4">
+                        <StackPanel ToolTip="{Binding FilePath}">
                         <Image Stretch="Uniform" 
                                RenderOptions.BitmapScalingMode="HighQuality"
                                Width="{Binding ElementName=theWindow, Path=DataContext.ThumbnailSize}"
                                Height="{Binding ElementName=theWindow, Path=DataContext.ThumbnailSize}"
                                Source="{Binding Thumbnail}"
                                MouseLeftButtonDown="Image_MouseLeftButtonDown"/>
+                            <TextBlock Text="{Binding OcrStatus}" TextWrapping="Wrap"
+                                       Width="{Binding ElementName=theWindow, Path=DataContext.ThumbnailSize}"/>
+                        </StackPanel>
                     </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>

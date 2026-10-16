@@ -72,7 +72,8 @@ namespace Sample.WPF
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            e.Cancel = _twainVM.State > 4;
+            e.Cancel = _twainVM.State > 4 || _twainVM.IsOrientationBusy;
+            if (_twainVM.IsOrientationBusy) AppLog.Info("图片仍在自动转正，请处理完成后关闭窗口。");
             base.OnClosing(e);
         }
         protected override void OnClosed(EventArgs e)

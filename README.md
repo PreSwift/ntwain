@@ -15,6 +15,9 @@ A nuget package is also [available here](https://www.nuget.org/packages/ntwain)
 (NOTE: this doc describes v3. For older version go to Source and choose v2 branch for its doc.)
 
 ## Using the lib
+For the WPF sample's offline document orientation classification and automatic
+rotation, see [automatic orientation correction](samples/OcrOrientationWorker/README.md).
+
 The maintained local library project is `NTwain/NTwain.csproj` (version 3.7.5,
 targeting .NET Framework 4.0 and 4.6.2). The WPF sample, unit tests, and
 `Make-package.cmd` all use this project. The former `src/NTwain` copy and its

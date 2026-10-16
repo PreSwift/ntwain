@@ -35,6 +35,51 @@ namespace Sample.WPF
         bool _captureUsesDriverUi;
         volatile int _lastImageWidth;
         volatile int _lastImageHeight;
+        readonly OcrOrientationValidator _ocrValidator = new OcrOrientationValidator();
+        volatile bool _isOcrValidationEnabled = true;
+
+        public bool IsOcrValidationEnabled
+        {
+            get { return _isOcrValidationEnabled; }
+            set { _isOcrValidationEnabled = value; RaisePropertyChanged(() => IsOcrValidationEnabled); }
+        }
+
+        public bool IsOrientationBusy { get { return _ocrValidator.PendingCount > 0; } }
+        public string OrientationProgress
+        {
+            get { return IsOrientationBusy ? "转正待处理 " + _ocrValidator.PendingCount + " 页" : ""; }
+        }
+
+        ICommand _validateOcrFilesCommand;
+        public ICommand ValidateOcrFilesCommand
+        {
+            get
+            {
+                return _validateOcrFilesCommand ?? (_validateOcrFilesCommand = new RelayCommand(() =>
+                {
+                    var dialog = new Microsoft.Win32.OpenFileDialog
+                    {
+                        Title = "选择图片自动转正（生成副本）",
+                        Filter = "图片|*.jpg;*.jpeg;*.png;*.bmp;*.tif;*.tiff",
+                        Multiselect = true
+                    };
+                    if (dialog.ShowDialog() == true)
+                    {
+                        var folder = Path.Combine(_scanRootFolder, "自动转正", DateTime.Now.ToString("yyyyMMdd-HHmmss")
+                            + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+                        Directory.CreateDirectory(folder);
+                        _currentScanFolder = folder;
+                        RaisePropertyChanged(() => ScanSaveFolderPath);
+                        foreach (var path in dialog.FileNames)
+                        {
+                            var copy = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".jpg");
+                            ScanImageProcessingHelper.CreateJpegCopy(path, copy);
+                            QueueScanItem(copy, true);
+                        }
+                    }
+                }, () => State <= 4));
+            }
+        }
 
         public TwainVM()
         {
@@ -44,6 +89,15 @@ namespace Sample.WPF
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 "NTwain Scans");
             Directory.CreateDirectory(_scanRootFolder);
+            _ocrValidator.PendingCountChanged += () =>
+            {
+                if (!App.Current.Dispatcher.HasShutdownStarted)
+                    App.Current.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        RaisePropertyChanged(() => IsOrientationBusy);
+                        RaisePropertyChanged(() => OrientationProgress);
+                    }));
+            };
 
             var appId = TWIdentity.CreateFromAssembly(DataGroups.Image | DataGroups.Audio, Assembly.GetEntryAssembly());
             _session = new TwainSession(appId);
@@ -639,9 +693,9 @@ namespace Sample.WPF
             var rotation = caps.ICapRotation;
             if (rotation.IsSupported && rotation.CanSet)
             {
-                var rc = rotation.SetValue((TWFix32)180f);
+                var rc = rotation.SetValue((TWFix32)0f);
                 var current = rotation.CanGetCurrent ? rotation.GetCurrent().ToString() : "?";
-                AppLog.Info("G300 ICAP_ROTATION=180: {0}, 当前={1}", rc, current);
+                AppLog.Info("G300 ICAP_ROTATION=0: {0}, 当前={1}，最终方向由整页分类处理", rc, current);
             }
             else
                 AppLog.Info("G300 不支持设置 ICAP_ROTATION");
@@ -1582,17 +1636,17 @@ namespace Sample.WPF
                     return;
                 }
 
-                savedPath = ScanImageRotationHelper.EnsureJpeg(savedPath);
+                savedPath = ScanImageProcessingHelper.EnsureJpeg(savedPath);
                 if (!_captureUsesDriverUi)
                 {
-                    ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
-                    ScanImageRotationHelper.TryAlignOrientationToPaperSize(savedPath, _selectedScanPaperSize, _session.CurrentSource);
-                    if (ScannerOrientationHelper.IsHuagaoSeries(_session.CurrentSource))
-                        ScanImageRotationHelper.TryCropNearWhiteMargins(savedPath, _selectedScanPaperSize);
+                    ScanImageProcessingHelper.PrepareScanGeometry(savedPath, _selectedScanPaperSize, _session.CurrentSource);
                 }
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);
-                QueueScanItem(savedPath);
+                ScanPaperSize? restoreCanvas = !_captureUsesDriverUi
+                    && ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(_session.CurrentSource, _selectedScanPaperSize)
+                    ? (ScanPaperSize?)_selectedScanPaperSize : null;
+                QueueScanItem(savedPath, false, restoreCanvas);
             }
             catch (Exception ex)
             {
@@ -1643,25 +1697,40 @@ namespace Sample.WPF
             }
         }
 
-        void QueueScanItem(string savedPath)
+        void QueueScanItem(string savedPath, bool forceOcr = false, ScanPaperSize? restoreCanvas = null)
         {
             var item = new CapturedScanItem { FilePath = savedPath };
+            if (forceOcr || IsOcrValidationEnabled)
+            {
+                item.OcrStatus = "等待自动转正…";
+                if (!_ocrValidator.TryQueue(savedPath, status =>
+                {
+                    if (!App.Current.Dispatcher.HasShutdownStarted)
+                        App.Current.Dispatcher.BeginInvoke(new Action(() => item.OcrStatus = status));
+                }, restoreCanvas, () => RefreshScanThumbnail(item)))
+                {
+                    item.OcrStatus = "自动转正未启动（保留图片）";
+                    AppLog.Info("自动转正处理器已停止: {0}", savedPath);
+                    Task.Run(() => RefreshScanThumbnail(item));
+                }
+            }
+            else Task.Run(() => RefreshScanThumbnail(item));
             App.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 CapturedImages.Add(item);
             }));
 
-            Task.Run(() =>
-            {
-                var thumb = LoadThumbnailFromFile(savedPath, (int)MaxThumbnailSize);
-                if (thumb == null)
-                    return;
+        }
 
-                App.Current.Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    item.Thumbnail = thumb;
-                }));
-            });
+        void RefreshScanThumbnail(CapturedScanItem item)
+        {
+            var thumb = LoadThumbnailFromFile(item.FilePath, (int)MaxThumbnailSize);
+            if (thumb == null) return;
+
+            if (!App.Current.Dispatcher.HasShutdownStarted) App.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                item.Thumbnail = thumb;
+            }));
         }
 
         static BitmapSource LoadThumbnailFromFile(string path, int maxWidth)
@@ -1674,6 +1743,7 @@ namespace Sample.WPF
                 var img = new BitmapImage();
                 img.BeginInit();
                 img.CacheOption = BitmapCacheOption.OnLoad;
+                img.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
                 img.UriSource = new Uri(path, UriKind.Absolute);
                 if (maxWidth > 0)
                 {
@@ -1695,6 +1765,7 @@ namespace Sample.WPF
 
         internal void CloseDown()
         {
+            _ocrValidator.Dispose();
             AppLog.Info("关闭会话, state={0}", _session.State);
             if (_session.State == 4)
             {
@@ -1723,6 +1794,8 @@ namespace Sample.WPF
                     ((RelayCommand)_cancelCommand).RaiseCanExecuteChanged();
                 if (_reloadSrc != null)
                     ((RelayCommand)_reloadSrc).RaiseCanExecuteChanged();
+                if (_validateOcrFilesCommand != null)
+                    ((RelayCommand)_validateOcrFilesCommand).RaiseCanExecuteChanged();
             }));
         }
     }
