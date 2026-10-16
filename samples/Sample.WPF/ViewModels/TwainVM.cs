@@ -168,7 +168,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261015-a3-k8-landscape, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261016-huagao-a3-rotate-270, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -547,12 +547,22 @@ namespace Sample.WPF
                         src.Name, label, applySize.GetDisplayName());
                 }
 
-                // 关掉会覆盖固定纸张尺寸的自动检测/裁边
-                TrySetCap(caps.ICapUndefinedImageSize, BoolType.False);
+                // 关掉会覆盖固定纸张尺寸的自动检测/裁边。
+                // G100 的物理宽度只有 10 英寸，横向框写不进去；界面扫描只改方向并保持不定尺寸。
+                var g100 = ScannerOrientationHelper.IsHuagaoG100(src);
+                if (g100)
+                {
+                    TrySetCap(caps.ICapUndefinedImageSize, BoolType.True);
+                    AppLog.Info("G100 保持不定图像尺寸，由扫描方向决定出图");
+                }
+                else
+                {
+                    TrySetCap(caps.ICapUndefinedImageSize, BoolType.False);
+                }
                 TrySetCap(caps.ICapAutomaticBorderDetection, BoolType.False);
                 TrySetCap(caps.ICapAutoSize, AutoSize.None);
 
-                if (!IsEpson(src))
+                if (!IsEpson(src) && !g100)
                     TryApplyScanOrientation(src, applySize);
 
                 if (IsEpson(src))
@@ -585,6 +595,24 @@ namespace Sample.WPF
                             AppLog.Info("当前驱动未列出 {0}，可用尺寸: {1}", label, string.Join(", ", available));
                         }
                     }
+                }
+                else if (g100)
+                {
+                    var sizes = caps.ICapSupportedSizes;
+                    if (sizes.IsSupported && sizes.CanSet)
+                        AppLog.Info("G100 {0} SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
+                    if (caps.ICapAutomaticBorderDetection.IsSupported && caps.ICapAutomaticBorderDetection.CanSet)
+                        AppLog.Info("G100 {0} 消除黑边=True: {1}", label, caps.ICapAutomaticBorderDetection.SetValue(BoolType.True));
+                }
+
+                if (g100)
+                {
+                    TryApplyScanOrientation(src, applySize);
+                    var rotation = caps.ICapRotation;
+                    if (rotation.IsSupported && rotation.CanSet)
+                        AppLog.Info("G100 ICAP_ROTATION=0: {0}", rotation.SetValue((TWFix32)0f));
+                    AppLog.Info("G100 不设置 ImageLayout：物理宽度 10 英寸，横向框会被拒绝");
+                    return;
                 }
 
                 if (TrySetImageLayout(src, applySize))
@@ -1558,7 +1586,9 @@ namespace Sample.WPF
                 if (!_captureUsesDriverUi)
                 {
                     ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
-                    ScanImageRotationHelper.TryAlignOrientationToPaperSize(savedPath, _selectedScanPaperSize);
+                    ScanImageRotationHelper.TryAlignOrientationToPaperSize(savedPath, _selectedScanPaperSize, _session.CurrentSource);
+                    if (ScannerOrientationHelper.IsHuagaoG100(_session.CurrentSource))
+                        ScanImageRotationHelper.TryCropNearWhiteMargins(savedPath, _selectedScanPaperSize);
                 }
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);

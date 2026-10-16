@@ -34,9 +34,29 @@ namespace Sample.WPF
             return info.IndexOf("G300", System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        public static bool ShouldInvertOrientation(DataSource src)
+        public static bool IsHuagaoG100(DataSource src)
         {
             if (src == null)
+                return false;
+            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+            return info.IndexOf("G100", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool IsHuagaoSeries(DataSource src)
+        {
+            if (src == null)
+                return false;
+            if (IsHuagaoG100(src) || IsHuagaoG300(src))
+                return true;
+            var info = string.Format("{0} {1}", src.Manufacturer, src.Name);
+            return info.IndexOf("华高", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("Huago", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || info.IndexOf("HUAGAO", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool ShouldInvertOrientation(DataSource src)
+        {
+            if (src == null || IsHuagaoG100(src))
                 return false;
 
             var info = string.Format("{0} {1}", src.Manufacturer, src.Name);

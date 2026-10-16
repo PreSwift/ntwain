@@ -29,6 +29,12 @@ namespace Sample.WPF
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return false;
 
+            if (ScannerOrientationHelper.IsHuagaoSeries(src) && selectedSize != ScanPaperSize.Auto)
+            {
+                AppLog.Info("华高 {0} 不在这里旋转，A3/8K 由方向校正处理", Path.GetFileName(path));
+                return false;
+            }
+
             if ((selectedSize == ScanPaperSize.A4L || selectedSize == ScanPaperSize.K16L) && src != null
                 && ((src.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
                     && src.Manufacturer.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -40,7 +46,7 @@ namespace Sample.WPF
             if (selectedSize == ScanPaperSize.Auto)
             {
                 string matchDetail;
-                if (!NeedsAutoFrontBackRotation(path, out matchDetail))
+                if (!NeedsAutoFrontBackRotation(path, ScannerOrientationHelper.IsHuagaoSeries(src), out matchDetail))
                 {
                     AppLog.Info("自动检测未旋转 {0}：{1}", Path.GetFileName(path), matchDetail);
                     return false;
@@ -125,9 +131,12 @@ namespace Sample.WPF
         /// <summary>
         /// 指定纸张时，横竖与纸张定义不一致就转正。正面 270°，背面 90°。
         /// </summary>
-        public static bool TryAlignOrientationToPaperSize(string path, ScanPaperSize size)
+        public static bool TryAlignOrientationToPaperSize(string path, ScanPaperSize size, DataSource src)
         {
             if (size == ScanPaperSize.Auto || string.IsNullOrEmpty(path) || !File.Exists(path))
+                return false;
+            if (ScannerOrientationHelper.IsHuagaoSeries(src)
+                && size != ScanPaperSize.A3 && size != ScanPaperSize.K8)
                 return false;
 
             var dims = size.GetDimensionsMm();
@@ -147,6 +156,7 @@ namespace Sample.WPF
                     var flip = side == "B"
                         ? RotateFlipType.Rotate90FlipNone
                         : RotateFlipType.Rotate270FlipNone;
+                    var angle = side == "B" ? "B 面顺时针 90" : "A 面顺时针 270";
                     var tempPath = path + ".tmp";
                     bmp.RotateFlip(flip);
                     SaveJpeg(bmp, tempPath);
@@ -156,7 +166,7 @@ namespace Sample.WPF
                         expectLandscape ? "横向" : "纵向",
                         originalWidth,
                         originalHeight,
-                        side == "B" ? "B 面顺时针 90" : "A 面顺时针 270");
+                        angle);
                 }
                 return true;
             }
@@ -252,7 +262,7 @@ namespace Sample.WPF
         /// <summary>
         /// 所有扫描仪与爱普生相同：A4/16K 横竖都转，竖版 A3/8K 转，横版 A3/8K 不转。
         /// </summary>
-        static bool NeedsAutoFrontBackRotation(string path, out string detail)
+        static bool NeedsAutoFrontBackRotation(string path, bool huagao, out string detail)
         {
             using (var bmp = new Bitmap(path))
             {
@@ -268,7 +278,9 @@ namespace Sample.WPF
                     return false;
                 }
 
-                if (matched == "A4" || matched == "A4L" || matched == "16K" || matched == "16KL")
+                if (huagao)
+                    rotate = matched == "A3" || matched == "8K";
+                else if (matched == "A4" || matched == "A4L" || matched == "16K" || matched == "16KL")
                     rotate = true;
 
                 var widthMm = bmp.Width / dpiX * 25.4f;
@@ -379,6 +391,84 @@ namespace Sample.WPF
             public float WidthMm;
             public float HeightMm;
             public bool Rotate;
+        }
+
+        /// <summary>
+        /// G100 扫不到 16K/8K 的标准尺寸时会按更大的幅面出图，四周是白边。裁到纸张内容。
+        /// </summary>
+        public static bool TryCropNearWhiteMargins(string path, ScanPaperSize size)
+        {
+            if (size != ScanPaperSize.K8 && size != ScanPaperSize.K16 && size != ScanPaperSize.K16L)
+                return false;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return false;
+
+            try
+            {
+                var tempPath = path + ".tmp";
+                using (var loaded = new Bitmap(path))
+                using (var source = new Bitmap(loaded.Width, loaded.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb))
+                {
+                    source.SetResolution(loaded.HorizontalResolution, loaded.VerticalResolution);
+                    using (var graphics = Graphics.FromImage(source))
+                        graphics.DrawImage(loaded, 0, 0, loaded.Width, loaded.Height);
+                    int left, top, right, bottom;
+                    if (!TryFindContentBounds(source, out left, out top, out right, out bottom))
+                        return false;
+                    var width = right - left + 1;
+                    var height = bottom - top + 1;
+                    if (width >= source.Width - 4 && height >= source.Height - 4)
+                        return false;
+                    var area = new Rectangle(left, top, width, height);
+                    using (var page = source.Clone(area, source.PixelFormat))
+                    {
+                        page.SetResolution(source.HorizontalResolution, source.VerticalResolution);
+                        SaveJpeg(page, tempPath);
+                    }
+                    AppLog.Info("G100 裁掉白边 {0}: {1}x{2} -> {3}x{4}", Path.GetFileName(path), source.Width, source.Height, width, height);
+                }
+                File.Replace(tempPath, path, null);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLog.Info("G100 裁白边失败: {0}", ex.Message);
+                return false;
+            }
+        }
+
+        static bool TryFindContentBounds(Bitmap bmp, out int left, out int top, out int right, out int bottom)
+        {
+            left = bmp.Width;
+            top = bmp.Height;
+            right = 0;
+            bottom = 0;
+            var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            try
+            {
+                var stride = data.Stride;
+                var bytes = new byte[stride * bmp.Height];
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
+                for (var y = 0; y < bmp.Height; y++)
+                {
+                    var row = y * stride;
+                    for (var x = 0; x < bmp.Width; x++)
+                    {
+                        var i = row + x * 3;
+                        if (bytes[i] > 245 && bytes[i + 1] > 245 && bytes[i + 2] > 245)
+                            continue;
+                        if (x < left) left = x;
+                        if (y < top) top = y;
+                        if (x > right) right = x;
+                        if (y > bottom) bottom = y;
+                    }
+                }
+            }
+            finally
+            {
+                bmp.UnlockBits(data);
+            }
+            return right > left && bottom > top;
         }
 
         static string GetSideFromFileName(string path)
