@@ -168,7 +168,7 @@ namespace Sample.WPF
                         try
                         {
                             AppLog.Info("============================== 开始扫描 ==============================");
-                            AppLog.Info("Scan build=20261016-huagao-a3-rotate-270, exe={0}, library={1}",
+                            AppLog.Info("Scan build=20261016-huagao-crop-border, exe={0}, library={1}",
                                 Assembly.GetEntryAssembly().Location, typeof(TwainSession).Assembly.Location);
                             ScanPaperSize selectedSize;
                             if (!TryPromptScanSize(out selectedSize))
@@ -1587,7 +1587,7 @@ namespace Sample.WPF
                 {
                     ScanImageRotationHelper.TryRotateSavedImage(savedPath, _selectedScanPaperSize, _session.CurrentSource);
                     ScanImageRotationHelper.TryAlignOrientationToPaperSize(savedPath, _selectedScanPaperSize, _session.CurrentSource);
-                    if (ScannerOrientationHelper.IsHuagaoG100(_session.CurrentSource))
+                    if (ScannerOrientationHelper.IsHuagaoSeries(_session.CurrentSource))
                         ScanImageRotationHelper.TryCropNearWhiteMargins(savedPath, _selectedScanPaperSize);
                 }
                 LogSavedImageSize(savedPath);

@@ -398,7 +398,8 @@ namespace Sample.WPF
         /// </summary>
         public static bool TryCropNearWhiteMargins(string path, ScanPaperSize size)
         {
-            if (size != ScanPaperSize.K8 && size != ScanPaperSize.K16 && size != ScanPaperSize.K16L)
+            if (size != ScanPaperSize.A3 && size != ScanPaperSize.K8
+                && size != ScanPaperSize.K16 && size != ScanPaperSize.K16L)
                 return false;
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return false;
@@ -425,14 +426,14 @@ namespace Sample.WPF
                         page.SetResolution(source.HorizontalResolution, source.VerticalResolution);
                         SaveJpeg(page, tempPath);
                     }
-                    AppLog.Info("G100 裁掉白边 {0}: {1}x{2} -> {3}x{4}", Path.GetFileName(path), source.Width, source.Height, width, height);
+                    AppLog.Info("华高裁掉四周黑边或白边 {0}: {1}x{2} -> {3}x{4}", Path.GetFileName(path), source.Width, source.Height, width, height);
                 }
                 File.Replace(tempPath, path, null);
                 return true;
             }
             catch (Exception ex)
             {
-                AppLog.Info("G100 裁白边失败: {0}", ex.Message);
+                AppLog.Info("华高裁边失败: {0}", ex.Message);
                 return false;
             }
         }
@@ -455,7 +456,9 @@ namespace Sample.WPF
                     for (var x = 0; x < bmp.Width; x++)
                     {
                         var i = row + x * 3;
-                        if (bytes[i] > 245 && bytes[i + 1] > 245 && bytes[i + 2] > 245)
+                        var dark = bytes[i] < 20 && bytes[i + 1] < 20 && bytes[i + 2] < 20;
+                        var light = bytes[i] > 245 && bytes[i + 1] > 245 && bytes[i + 2] > 245;
+                        if (dark || light)
                             continue;
                         if (x < left) left = x;
                         if (y < top) top = y;
