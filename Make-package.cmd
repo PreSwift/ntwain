@@ -1,3 +1,4 @@
 @echo off
-dotnet build -c Release src/NTwain/NTwain.csproj
-dotnet pack -c Release /p:ContinuousIntegrationBuild=true -o ./build src/NTwain/NTwain.csproj
+dotnet build -c Release NTwain/NTwain.csproj
+if errorlevel 1 exit /b %errorlevel%
+dotnet pack -c Release --no-build /p:ContinuousIntegrationBuild=true -o ./build NTwain/NTwain.csproj

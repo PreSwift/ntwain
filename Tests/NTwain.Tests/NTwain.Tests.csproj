@@ -75,9 +75,10 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NTwain\NTwain.csproj">
-      <Project>{0C5A6FB1-0282-4D61-8354-68DEB1515001}</Project>
+    <ProjectReference Include="..\..\NTwain\NTwain.csproj">
+      <Project>{C9F04F6E-EFC4-4A88-97DF-D1AF7FA33641}</Project>
       <Name>NTwain</Name>
+      <AdditionalProperties>TargetFramework=net462</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

@@ -21,6 +21,7 @@
     <Version>3.7.5</Version>
     <LangVersion>7.1</LangVersion>
     <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>Sign.snk</AssemblyOriginatorKeyFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <!--<AssemblyOriginatorKeyFile>..\..\..\release-build\strong-name.snk</AssemblyOriginatorKeyFile>-->
   </PropertyGroup>

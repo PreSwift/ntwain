@@ -15,6 +15,11 @@ A nuget package is also [available here](https://www.nuget.org/packages/ntwain)
 (NOTE: this doc describes v3. For older version go to Source and choose v2 branch for its doc.)
 
 ## Using the lib
+The maintained local library project is `NTwain/NTwain.csproj` (version 3.7.5,
+targeting .NET Framework 4.0 and 4.6.2). The WPF sample, unit tests, and
+`Make-package.cmd` all use this project. The former `src/NTwain` copy and its
+.NET 6 target have been retired.
+
 To properly use this lib you will need to be reasonably familiar with the TWAIN spec
 and understand how it works in general (especially capability). 
 The TWAIN spec can be downloaded from [twain.org](http://twain.org/). 
