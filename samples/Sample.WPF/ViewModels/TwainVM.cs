@@ -34,6 +34,7 @@ namespace Sample.WPF
         bool _isDuplexScan;
         ScanPaperSize _selectedScanPaperSize;
         bool _captureUsesDriverUi;
+        bool _scanAreaFallback;
         volatile int _lastImageWidth;
         volatile int _lastImageHeight;
         readonly OcrOrientationValidator _ocrValidator = new OcrOrientationValidator();
@@ -240,6 +241,7 @@ namespace Sample.WPF
                             _needCancel = false;
                             _selectedScanPaperSize = selectedSize;
                             _captureUsesDriverUi = ShowUI;
+                            _scanAreaFallback = false;
                             BeginScanSession(src);
                             var restoredEpsonProfile = !_captureUsesDriverUi
                                 && selectedSize == ScanPaperSize.A4L && IsWfC21000(src)
@@ -256,20 +258,20 @@ namespace Sample.WPF
                             {
                                 if (!restoredEpsonProfile)
                                     TryForceFeederScan(src);
-                                TryApplyEpsonA4LFullArea(src);
+                                _scanAreaFallback = ApplyScanAreaWithFallback(src, selectedSize, () => TryApplyEpsonA4LFullArea(src));
                                 TryForceDuplexScan(src);
                             }
                             else if (IsKonicaFullAreaLandscape(src, selectedSize))
                             {
                                 TryForceFeederScan(src);
                                 TryForceDuplexScan(src);
-                                TryApplyKonicaLandscapeFullArea(src);
+                                _scanAreaFallback = ApplyScanAreaWithFallback(src, selectedSize, () => TryApplyKonicaLandscapeFullArea(src));
                             }
                             else if (!restoredEpsonProfile)
                             {
                                 TryForceFeederScan(src);
                                 TryForceDuplexScan(src);
-                                TryForceScanSize(src, selectedSize);
+                                _scanAreaFallback = ApplyScanAreaWithFallback(src, selectedSize, () => TryForceScanSize(src, selectedSize));
                                 TryApplyHuagaoG300NoUi(src);
                             }
                             TryApplyHuagaoG300SwapSides(src);
@@ -631,6 +633,55 @@ namespace Sample.WPF
         /// <summary>
         /// 在 Enable 之前强制扫描尺寸：优先 ICAP_SUPPORTEDSIZES，失败则用 ImageLayout 指定物理区域。
         /// </summary>
+        static bool ApplyScanAreaWithFallback(DataSource src, ScanPaperSize size, Action configure)
+        {
+            try { configure(); return false; }
+            catch (AccessViolationException) { throw; }
+            catch (Exception ex)
+            {
+                if (size == ScanPaperSize.Auto) throw;
+                AppLog.Info("{0} 原方向配置失败: {1}，统一交换宽高与方向重试", size, ex.Message);
+            }
+            try
+            {
+                var effective = ScannerOrientationHelper.GetEffectiveSize(src, size);
+                if (ScannerOrientationHelper.IsHuagaoG100(src))
+                {
+                    ScanPaperSize alternate;
+                    switch (effective)
+                    {
+                        case ScanPaperSize.A4: alternate = ScanPaperSize.A4L; break;
+                        case ScanPaperSize.A4L: alternate = ScanPaperSize.A4; break;
+                        case ScanPaperSize.K16: alternate = ScanPaperSize.K16L; break;
+                        case ScanPaperSize.K16L: alternate = ScanPaperSize.K16; break;
+                        default:
+                            // 没有对应纸型名称的尺寸使用标准交换区域重试。
+                            TryApplyScanOrientation(src, effective, true);
+                            if (!TrySetImageLayout(src, effective, true)) throw new InvalidOperationException("交换区域失败");
+                            return true;
+                    }
+                    TryApplyHuagaoG100Paper(src, alternate);
+                }
+                else
+                {
+                    var caps = src.Capabilities;
+                    TrySetCap(caps.ICapUndefinedImageSize, BoolType.False);
+                    TrySetCap(caps.ICapAutomaticBorderDetection, BoolType.False);
+                    TrySetCap(caps.ICapAutoSize, AutoSize.None);
+                    TrySetCap(caps.ICapSupportedSizes, SupportedSize.None);
+                    TryApplyScanOrientation(src, effective, true);
+                    if (!TrySetImageLayout(src, effective, true)) throw new InvalidOperationException("交换区域失败");
+                }
+                AppLog.Info("{0} 另一方向扫描区域回退成功", size);
+                return true;
+            }
+            catch (AccessViolationException) { throw; }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(size.GetDisplayName() + " 两个方向均无法配置，已中止扫描。", ex);
+            }
+        }
+
         static void TryForceScanSize(DataSource src, ScanPaperSize size)
         {
             if (src == null)
@@ -705,11 +756,7 @@ namespace Sample.WPF
                 }
                 else
                 {
-                    AppLog.Info("{0} 扫描区域设置失败，交换宽高与扫描方向后重试", label);
-                    TryApplyScanOrientation(src, applySize, true);
-                    if (!TrySetImageLayout(src, applySize, true))
-                        throw new InvalidOperationException(label + " 两个方向的扫描区域均设置失败，已中止扫描，避免沿用上次纸张尺寸。");
-                    AppLog.Info("{0} 已回退到另一方向扫描", label);
+                    throw new InvalidOperationException(label + " 扫描区域设置失败。");
                 }
             }
             catch (InvalidOperationException)
@@ -719,6 +766,7 @@ namespace Sample.WPF
             catch (Exception ex)
             {
                 AppLog.Info("强制 {0} 扫描尺寸失败: {1}", size.GetDisplayName(), ex.Message);
+                throw;
             }
         }
 
@@ -793,6 +841,11 @@ namespace Sample.WPF
             var rotation = caps.ICapRotation;
             if (rotation.IsSupported && rotation.CanSet)
                 AppLog.Info("G100 ICAP_ROTATION=0: {0}", rotation.SetValue((TWFix32)0f));
+            if (paperName == null
+                || !string.Equals(Convert.ToString(caps.GetCurrent((CapabilityId)HuagaoPaperName)), paperName, StringComparison.Ordinal)
+                || Math.Abs(Convert.ToSingle(caps.GetCurrent((CapabilityId)HuagaoPaperRight)) - widthMm) > 0.1f
+                || Math.Abs(Convert.ToSingle(caps.GetCurrent((CapabilityId)HuagaoPaperBottom)) - heightMm) > 0.1f)
+                throw new InvalidOperationException("G100 纸张区域读回与请求不符。");
         }
 
         static void TrySetHuagaoString(DataSource src, CapabilityId id, string value)
@@ -1080,6 +1133,12 @@ namespace Sample.WPF
             if (horizontalPaper)
             {
                 TryApplyEpsonA4LUiGeometry(src);
+                var frames = src.Capabilities.ICapFrames;
+                if (!frames.CanGetCurrent) throw new InvalidOperationException("无法确认 Epson 横向区域");
+                var frame = frames.GetCurrent();
+                if (Math.Abs((float)frame.Right - (float)frame.Left - 11.69f) > 0.02f
+                    || Math.Abs((float)frame.Bottom - (float)frame.Top - 8.27f) > 0.02f)
+                    throw new InvalidOperationException("Epson 横向区域读回不符");
                 return;
             }
             var autoRotate = src.Capabilities.ICapAutomaticRotate;
@@ -1115,7 +1174,7 @@ namespace Sample.WPF
             }
 
             if (!TrySetFrame(src, size, false))
-                AppLog.Info("爱普生按当前单位设置扫描区域失败");
+                throw new InvalidOperationException("爱普生按当前单位设置扫描区域失败");
 
 
             if (AppLog.Instance.IsDebugEnabled || size == ScanPaperSize.K16 || size == ScanPaperSize.K16L)
@@ -1263,6 +1322,7 @@ namespace Sample.WPF
 
         static void TryApplyKonicaPaperFrame(DataSource src, ScanPaperSize size, string label)
         {
+            EnsureScanAreaInches(src);
             // 驱动回报的物理幅面停在 8.5 x 11 英寸，按它裁会把 8K 收成 A3。
             // 与爱普生一样按纸张毫米数写扫描区域，不跟这个上限裁。
             var dims = size.GetDimensionsMm();
@@ -1278,20 +1338,75 @@ namespace Sample.WPF
                     AppLog.Info("Konica {0}: SupportedSizes=None: {1}", label, sizes.SetValue(SupportedSize.None));
             }
 
+            EnsureScanAreaInches(src);
             var frame = new TWFrame { Left = 0, Top = 0, Right = width, Bottom = height };
             TWImageLayout layout;
             src.DGImage.ImageLayout.Get(out layout);
             layout.Frame = frame;
-            AppLog.Info("Konica {0} ImageLayout Inches: {1}, Frame={2}", label, src.DGImage.ImageLayout.Set(layout), frame);
+            var rc = src.DGImage.ImageLayout.Set(layout);
+            AppLog.Info("Konica {0} ImageLayout Inches: {1}, Frame={2}", label, rc, frame);
             var frames = src.Capabilities.ICapFrames;
             if (frames.IsSupported && frames.CanSet)
-                AppLog.Info("Konica {0} ICapFrames: {1}", label, frames.SetValue(frame));
+            {
+                rc = frames.SetValue(frame);
+                AppLog.Info("Konica {0} ICapFrames: {1}", label, rc);
+            }
+            if (rc != ReturnCode.Success) throw new InvalidOperationException("Konica 扫描区域设置失败");
+        }
+
+        static void EnsureScanAreaInches(DataSource src)
+        {
+            var units = src.Capabilities.ICapUnits;
+            if (units.CanGetCurrent && units.GetCurrent() == Unit.Inches)
+            {
+                AppLog.Info("扫描区域单位已确认: Inches");
+                return;
+            }
+            if (units.CanSet)
+                AppLog.Info("设置扫描区域单位 Inches: {0}", units.SetValue(Unit.Inches));
+            if (!units.CanGetCurrent || units.GetCurrent() != Unit.Inches)
+                throw new InvalidOperationException("无法确认扫描区域单位为英寸");
+            AppLog.Info("扫描区域单位读回: Inches");
+        }
+
+        static void DisableFullAreaAutoGeometry(DataSource src)
+        {
+            var caps = src.Capabilities;
+            SetFullAreaGeometry(caps.ICapAutoSize, AutoSize.None, "ICapAutoSize");
+            SetFullAreaGeometry(caps.ICapAutomaticBorderDetection, BoolType.False, "ICapAutomaticBorderDetection");
+            SetFullAreaGeometry(caps.ICapUndefinedImageSize, BoolType.False, "ICapUndefinedImageSize");
+        }
+
+        static void SetFullAreaGeometry<T>(ICapWrapper<T> cap, T value, string name)
+        {
+            if (!cap.IsSupported)
+            {
+                AppLog.Info("全幅扫描 {0} 不支持，跳过", name);
+                return;
+            }
+            if (cap.CanSet)
+            {
+                var rc = cap.SetValue(value);
+                AppLog.Info("全幅扫描 {0}={1}: {2}", name, value, rc);
+                if (rc != ReturnCode.Success)
+                    throw new InvalidOperationException("无法设置全幅扫描 " + name);
+            }
+            if (cap.CanGetCurrent)
+            {
+                var current = cap.GetCurrent();
+                AppLog.Info("全幅扫描 {0} 读回={1}", name, current);
+                if (!EqualityComparer<T>.Default.Equals(current, value))
+                    throw new InvalidOperationException("全幅扫描 " + name + " 读回不符");
+            }
+            else if (!cap.CanSet)
+                throw new InvalidOperationException("无法设置或确认全幅扫描 " + name);
         }
 
         static void TryApplyKonicaLandscapeFullArea(DataSource src)
         {
             try
             {
+                EnsureScanAreaInches(src);
                 AppLog.Info("Konica landscape: acquire full area before cropping");
                 var sizes = src.Capabilities.ICapSupportedSizes;
                 if (sizes.IsSupported && sizes.CanSet)
@@ -1299,18 +1414,23 @@ namespace Sample.WPF
                 var orientation = src.Capabilities.ICapOrientation;
                 if (orientation.IsSupported && orientation.CanSet)
                     AppLog.Info("Full-area Orientation=Rot0: {0}", orientation.SetValue(OrientationType.Rot0));
+                DisableFullAreaAutoGeometry(src);
+                EnsureScanAreaInches(src);
                 TWImageLayout layout;
                 src.DGImage.ImageLayout.Get(out layout);
                 layout.Frame = new TWFrame { Left = 0, Top = 0, Right = 11.69f, Bottom = 17f };
-                AppLog.Info("Full-area ImageLayout={0}: {1}", layout.Frame, src.DGImage.ImageLayout.Set(layout));
+                var rc = src.DGImage.ImageLayout.Set(layout);
+                AppLog.Info("Full-area ImageLayout={0}: {1}", layout.Frame, rc);
+                if (rc != ReturnCode.Success) throw new InvalidOperationException("Konica 全幅扫描区域设置失败");
             }
-            catch (Exception ex) { AppLog.Info("Konica full-area configuration failed: {0}", ex); }
+            catch (Exception ex) { AppLog.Info("Konica full-area configuration failed: {0}", ex); throw; }
         }
 
         static void TryApplyEpsonA4LFullArea(DataSource src)
         {
             try
             {
+                EnsureScanAreaInches(src);
                 AppLog.Info("WF-C21000 A4L: acquire full area before cropping to A4L");
                 var sizes = src.Capabilities.ICapSupportedSizes;
                 if (sizes.IsSupported && sizes.CanSet)
@@ -1321,15 +1441,20 @@ namespace Sample.WPF
                 var orientation = src.Capabilities.ICapOrientation;
                 if (orientation.IsSupported && orientation.CanSet)
                     AppLog.Info("Full-area Orientation=Rot0: {0}", orientation.SetValue(OrientationType.Rot0));
+                DisableFullAreaAutoGeometry(src);
+                EnsureScanAreaInches(src);
                 var frames = src.Capabilities.ICapFrames;
                 if (frames.IsSupported && frames.CanSet)
                 {
                     var frame = new TWFrame { Left = 0, Top = 0, Right = 11.69f, Bottom = 17f };
-                    AppLog.Info("Full-area Frames={0}: {1}", frame, frames.SetValue(frame));
+                    var rc = frames.SetValue(frame);
+                    AppLog.Info("Full-area Frames={0}: {1}", frame, rc);
+                    if (rc != ReturnCode.Success) throw new InvalidOperationException("Epson 全幅扫描区域设置失败");
                 }
+                else throw new InvalidOperationException("Epson 无法设置全幅扫描区域");
                 LogScanGeometry(src);
             }
-            catch (Exception ex) { AppLog.Info("WF-C21000 A4L full-area configuration failed: {0}", ex); }
+            catch (Exception ex) { AppLog.Info("WF-C21000 A4L full-area configuration failed: {0}", ex); throw; }
         }
 
         static void TrySetSupportedPaperSize(DataSource src, ScanPaperSize size, string label)
@@ -1386,8 +1511,11 @@ namespace Sample.WPF
                 maxWidth = physicalWidth.GetCurrent();
             if (physicalHeight.IsSupported)
                 maxHeight = physicalHeight.GetCurrent();
-            width = Math.Min(width, maxWidth);
-            height = Math.Min(height, maxHeight);
+            if (width > maxWidth + 0.001f || height > maxHeight + 0.001f)
+            {
+                AppLog.Info("请求区域超过物理范围，不截短纸张，交由统一方向回退处理");
+                return false;
+            }
             var left = GetFrameLeft(src, maxWidth, width);
             AppLog.Info("扫描区域上限 {0}: {1} x {2}，左边距 {3}", unit, maxWidth, maxHeight, left);
 
@@ -1561,7 +1689,7 @@ namespace Sample.WPF
 
             var frames = src.Capabilities.ICapFrames;
             if (frames.IsSupported && frames.CanSet)
-                frames.SetValue(layout.Frame);
+                return frames.SetValue(layout.Frame) == ReturnCode.Success;
             return true;
         }
 
@@ -1898,13 +2026,13 @@ namespace Sample.WPF
                 }
 
                 savedPath = ScanImageProcessingHelper.EnsureJpeg(savedPath);
-                if (!_captureUsesDriverUi)
+                if (!_captureUsesDriverUi && !_scanAreaFallback)
                 {
                     ScanImageProcessingHelper.PrepareScanGeometry(savedPath, _selectedScanPaperSize, _session.CurrentSource);
                 }
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);
-                ScanPaperSize? restoreCanvas = !_captureUsesDriverUi
+                ScanPaperSize? restoreCanvas = !_captureUsesDriverUi && !_scanAreaFallback
                     && ScannerOrientationHelper.UsesEpsonA4LandscapeAcquisition(_session.CurrentSource, _selectedScanPaperSize)
                     ? (ScanPaperSize?)_selectedScanPaperSize : null;
                 QueueScanItem(savedPath, false, restoreCanvas);
