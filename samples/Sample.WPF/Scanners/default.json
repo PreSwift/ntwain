@@ -1,0 +1,35 @@
+{
+  "id": "default",
+  "name": "默认",
+  "note": "未单独适配的机型。进纸、双面和 200 DPI 之后，用标准纸张尺寸加扫描框。",
+  "fallbackSwapDimensions": true,
+  "commonBefore": [
+    { "cap": "CapFeederEnabled", "value": true, "note": "走自动进纸器" },
+    { "cap": "CapXferCount", "value": -1, "note": "连续进纸，不设置 CapAutoFeed" },
+    { "cap": "CapDuplexEnabled", "value": true, "note": "驱动报告不支持双面时会跳过" }
+  ],
+  "commonAfter": [
+    { "cap": "ICapUnits", "value": "Inches", "note": "分辨率以英寸为单位，200 才是 DPI" },
+    { "cap": "ICapXResolution", "value": 200, "unit": "dpi" },
+    { "cap": "ICapYResolution", "value": 200, "unit": "dpi" },
+    { "cap": "CapIndicators", "value": false }
+  ],
+  "papers": {
+    "Auto": {
+      "note": "清掉上一次固定纸张，否则 16KL 留下的 A3 会让下一次自动检测扫出整张 A3",
+      "area": "settingsOnly",
+      "settings": [
+        { "cap": "ICapSupportedSizes", "value": "None" },
+        { "cap": "ICapAutoSize", "value": "Auto" },
+        { "cap": "ICapAutomaticBorderDetection", "value": true },
+        { "cap": "ICapUndefinedImageSize", "value": true }
+      ]
+    },
+    "A3": { "area": "supportedSizeAndFrame" },
+    "A4": { "area": "supportedSizeAndFrame" },
+    "A4L": { "area": "supportedSizeAndFrame" },
+    "K8": { "area": "supportedSizeAndFrame" },
+    "K16": { "area": "supportedSizeAndFrame" },
+    "K16L": { "area": "supportedSizeAndFrame" }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "id": "huagao-g100",
+  "name": "华高 G100",
+  "extends": "default",
+  "priority": 20,
+  "fallbackSwapDimensions": true,
+  "cropMargins": true,
+  "note": "纸张名和毫米数来自驱动界面报告。标准 SupportedSizes 一直是 A4，不要改它。",
+  "match": { "nameContains": ["G100"] },
+  "commonBefore": [
+    { "cap": "ICapUndefinedImageSize", "value": true },
+    { "cap": "ICapAutomaticBorderDetection", "value": true },
+    { "cap": "ICapAutoSize", "value": "None" }
+  ],
+  "papers": {
+    "A3": {
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "A3" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 297, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 420, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "A4": {
+      "note": "界面报告：A4，210mm x 297mm，Rot0",
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "A4" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 210, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 297, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "A4L": {
+      "note": "界面报告：A4横向，297mm x 210mm，Landscape",
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "A4横向" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 297, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 210, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Landscape" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "K8": {
+      "note": "界面报告：8开，297mm x 420mm，Rot0",
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "8开" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 297, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 420, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "K16": {
+      "note": "界面报告：16开，210mm x 285mm，Rot0",
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "16开" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 210, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 285, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "K16L": {
+      "note": "界面报告：16开横向，285mm x 210mm，Landscape",
+      "area": "settingsOnly",
+      "verify": true,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "16开横向" },
+        { "cap": "CustomBase+2065", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2066", "value": 285, "unit": "mm" },
+        { "cap": "CustomBase+2067", "value": 0, "unit": "mm" },
+        { "cap": "CustomBase+2068", "value": 210, "unit": "mm" },
+        { "cap": "ICapOrientation", "value": "Landscape" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    }
+  }
+}

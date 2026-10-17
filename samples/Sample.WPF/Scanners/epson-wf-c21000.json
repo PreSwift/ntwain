@@ -1,0 +1,77 @@
+{
+  "id": "epson-wf-c21000",
+  "name": "爱普生 WF-C21000",
+  "extends": "default",
+  "priority": 20,
+  "fallbackSwapDimensions": true,
+  "note": "不要把单位改成厘米再写扫描框。A4 和 16K 按横向区域采集；A4L 和 16KL 先扫整幅再裁切。",
+  "match": {
+    "manufacturerContains": ["EPSON", "爱普生"],
+    "nameContains": ["WF-C21000"]
+  },
+  "driverProfile": {
+    "file": "epson-wf-c21000-a4l.dsdata",
+    "supportedSize": "A4",
+    "frameRight": 11.69,
+    "frameBottom": 8.27,
+    "requireWidthGreaterThanHeight": true
+  },
+  "papers": {
+    "A4": {
+      "note": "竖向进纸按 A4L 的毫米区域采集，方向保持 Rot0，扫完后补回竖向画布",
+      "area": "supportedSizeAndFrame",
+      "usePaper": "A4L",
+      "forceOrientation": "Rot0",
+      "frameMode": "currentUnitFrames",
+      "restoreCanvas": true,
+      "settings": [
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapSupportedSizes", "value": "A4" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "K16": {
+      "note": "与 A4 相同，按 16KL 区域采集并保持 Rot0",
+      "area": "supportedSizeAndFrame",
+      "usePaper": "K16L",
+      "forceOrientation": "Rot0",
+      "frameMode": "currentUnitFrames",
+      "restoreCanvas": true,
+      "settings": [
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "A4L": {
+      "note": "整幅 11.69 x 17 英寸，扫完后裁成 A4L。有已保存的驱动配置时先恢复。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": true,
+      "skipIndicators": true,
+      "restoreDriverProfile": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A3" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 17, "unit": "inch", "target": "ICapFrames" }
+    },
+    "K16L": {
+      "note": "与 A4L 相同的整幅，扫完后按 16KL 裁切",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": true,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A3" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 17, "unit": "inch", "target": "ICapFrames" }
+    }
+  }
+}

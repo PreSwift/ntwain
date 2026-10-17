@@ -3,25 +3,20 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using NTwain;
 
 namespace Sample.WPF
 {
     /// <summary>保留机型取景几何；最终旋转角度仅由整页分类器提供。</summary>
     static class ScanImageProcessingHelper
     {
-        public static void PrepareScanGeometry(string path, ScanPaperSize size, DataSource source)
+        public static void PrepareScanGeometry(string path, ScanPaperSize size, bool cropFullArea, bool cropMargins)
         {
-            bool fullArea = size == ScanPaperSize.A4L || size == ScanPaperSize.K16L;
-            bool epson = source != null
-                && source.Name.IndexOf("WF-C21000", StringComparison.OrdinalIgnoreCase) >= 0
-                && source.Manufacturer.IndexOf("EPSON", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (fullArea && (epson || ScannerOrientationHelper.IsKonica(source)))
+            if (cropFullArea)
             {
                 try { CropFullArea(path, size); }
                 catch (Exception ex) { AppLog.Info("全幅裁切失败，保留完整图像继续方向分类: {0}", ex.Message); }
             }
-            if (ScannerOrientationHelper.IsHuagaoSeries(source))
+            if (cropMargins)
                 TryCropNearWhiteMargins(path, size);
         }
 

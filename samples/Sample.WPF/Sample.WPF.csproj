@@ -119,6 +119,7 @@
       <DependentUpon>Launcher.xaml</DependentUpon>
     </Compile>
     <Compile Include="CapturedScanItem.cs" />
+    <Compile Include="ScannerProfile.cs" />
     <Compile Include="ScannerOrientationHelper.cs" />
     <Compile Include="ScanImageRotationHelper.cs" />
     <Compile Include="NativeImageSaveHelper.cs" />
@@ -179,6 +180,23 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="scanner.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Scanners\default.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Scanners\huagao-g100.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Scanners\huagao-g300.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Scanners\epson-wf-c21000.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Scanners\konica.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

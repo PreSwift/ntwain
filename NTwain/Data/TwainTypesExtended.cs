@@ -745,6 +745,29 @@ namespace NTwain.Data
 
         internal IntPtr Container { get { return _hContainer; } }
 
+        /// <summary>
+        /// 在驱动返回的枚举容器里改当前项，不重写选项内容。
+        /// </summary>
+        public bool TrySelectEnumIndex(int index)
+        {
+            if (ContainerType != ContainerType.Enum || _hContainer == IntPtr.Zero || index < 0)
+                return false;
+            var memory = PlatformInfo.Current.MemoryManager;
+            var baseAddr = memory.Lock(_hContainer);
+            try
+            {
+                int count = Marshal.ReadInt32(baseAddr, 2);
+                if (index >= count)
+                    return false;
+                Marshal.WriteInt32(baseAddr, 6, index);
+                return true;
+            }
+            finally
+            {
+                memory.Unlock(_hContainer);
+            }
+        }
+
         #endregion
 
         #region value functions
@@ -759,7 +782,7 @@ namespace NTwain.Data
                 case ItemType.String32:
                 case ItemType.String64:
 
-                    _hContainer = memoryManager.Allocate((uint)(Marshal.SizeOf(typeof(TWFrame)) + 2));
+                    _hContainer = memoryManager.Allocate((uint)(2 + TypeExtensions.GetItemTypeSize(type)));
                     if (_hContainer != IntPtr.Zero)
                     {
                         IntPtr baseAddr = memoryManager.Lock(_hContainer);

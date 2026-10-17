@@ -1,0 +1,45 @@
+{
+  "id": "konica",
+  "name": "柯尼卡美能达",
+  "extends": "default",
+  "priority": 20,
+  "fallbackSwapDimensions": true,
+  "note": "驱动报告的物理幅面停在 8.5 x 11 英寸，按它裁会把 8 开收成更小的纸。界面里的 16K 读不回能力，只能按毫米写扫描框。",
+  "match": {
+    "manufacturerContains": ["KONICA", "MINOLTA", "柯尼卡", "美能达"]
+  },
+  "papers": {
+    "A3": { "area": "frameIgnorePhysicalLimit" },
+    "A4": { "area": "frameIgnorePhysicalLimit" },
+    "K8": { "area": "frameIgnorePhysicalLimit" },
+    "K16": { "area": "frameIgnorePhysicalLimit" },
+    "A4L": {
+      "note": "先扫 11.69 x 17 英寸整幅，扫完后裁成 A4L",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A3" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 17, "unit": "inch", "target": "ImageLayout" }
+    },
+    "K16L": {
+      "note": "与 A4L 相同的整幅，扫完后按 16KL 裁切",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A3" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 17, "unit": "inch", "target": "ImageLayout" }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "huagao-g300",
+  "name": "华高 G300",
+  "extends": "default",
+  "priority": 20,
+  "fallbackSwapDimensions": true,
+  "swapPortraitLandscape": true,
+  "cropMargins": true,
+  "note": "进纸方向与纸张名相反，所以先对调 A4/A4L、16K/16KL。交换正反面是界面报告里跟着勾选变化的两个私有能力。",
+  "match": { "nameContains": ["G300"] },
+  "commonAfter": [
+    { "cap": "ICapAutomaticBorderDetection", "value": true, "note": "纸张策略会先关掉消黑边，这里再打开" },
+    { "cap": "ICapRotation", "value": 0 },
+    { "cap": "CustomBase+148", "value": 1, "note": "交换正反面" },
+    { "cap": "CustomBase+2074", "value": 1, "note": "交换正反面" }
+  ]
+}
