@@ -139,7 +139,15 @@ namespace Sample.WPF
                 AppLog.Info("{0} 按 {1} 的纸张配置设置", size.GetDisplayName(), attempted.GetDisplayName());
             try
             {
-                return ApplyOnce(src, attempted);
+                var result = ApplyOnce(src, attempted);
+                if (result != null)
+                    return result;
+                if (!FallbackSwapDimensions || size == ScanPaperSize.Auto)
+                    throw new InvalidOperationException(size.GetDisplayName() + " 配置与请求不符，已中止扫描。");
+                AppLog.Info("{0} 原方向配置与请求不符，交换宽高与方向重试", size.GetDisplayName());
+                ApplySwappedFallback(src, attempted);
+                AppLog.Info("{0} 另一方向扫描区域回退成功", size.GetDisplayName());
+                return new ScanApplyResult { UsedDimensionFallback = true };
             }
             catch (AccessViolationException)
             {
@@ -172,14 +180,17 @@ namespace Sample.WPF
             ApplySettings(src, CommonBefore, false);
             var paper = paperOf(size);
             if (paper != null)
-                ApplyPaper(src, size, paper);
+            {
+                if (!ApplyPaper(src, size, paper))
+                    return null;
+            }
             else
                 ApplyGenericSwap(src, size);
             ApplySettings(src, CommonAfter, paper != null && paper.skipIndicators);
             return new ScanApplyResult
             {
                 CropAfterScan = paper != null && paper.cropAfterScan,
-                CropMargins = CropMargins,
+                CropMargins = paper != null && paper.cropMargins.HasValue ? paper.cropMargins.Value : CropMargins,
                 RestoreCanvas = paper != null && paper.restoreCanvas
             };
         }
@@ -210,7 +221,8 @@ namespace Sample.WPF
                 && string.Equals(otherPaper.area, "settingsOnly", StringComparison.OrdinalIgnoreCase))
             {
                 ApplySettings(src, CommonBefore, false);
-                ApplyPaper(src, other, otherPaper);
+                if (!ApplyPaper(src, other, otherPaper))
+                    throw new InvalidOperationException(other.GetDisplayName() + " 读回与请求不符");
                 ApplySettings(src, CommonAfter, otherPaper.skipIndicators);
                 return;
             }
@@ -219,7 +231,7 @@ namespace Sample.WPF
             ApplySettings(src, CommonAfter, false);
         }
 
-        void ApplyPaper(DataSource src, ScanPaperSize size, PaperConfig paper)
+        bool ApplyPaper(DataSource src, ScanPaperSize size, PaperConfig paper)
         {
             var dimensionSize = size;
             if (!string.IsNullOrEmpty(paper.usePaper))
@@ -230,8 +242,8 @@ namespace Sample.WPF
                 case "settingsOnly":
                     ApplySettings(src, paper.settings, false);
                     ApplySettings(src, CustomStringSettings(paper.settings), false);
-                    if (paper.verify)
-                        VerifySettings(src, paper.settings);
+                    if (paper.verify && !VerifySettings(src, paper.settings))
+                        return false;
                     break;
                 case "supportedSizeAndFrame":
                     ApplySupportedSizeAndFrame(src, dimensionSize, paper);
@@ -245,6 +257,7 @@ namespace Sample.WPF
                 default:
                     throw new InvalidOperationException("未知扫描区域策略: " + area);
             }
+            return true;
         }
 
         void ApplySupportedSizeAndFrame(DataSource src, ScanPaperSize size, PaperConfig paper)
@@ -590,10 +603,10 @@ namespace Sample.WPF
             AppLog.Info("0x{0:X4}={1}: {2}, 当前={3}", (int)id, value, rc, src.Capabilities.GetCurrent(id));
         }
 
-        void VerifySettings(DataSource src, IList<CapSetting> settings)
+        bool VerifySettings(DataSource src, IList<CapSetting> settings)
         {
             if (settings == null)
-                return;
+                return true;
             foreach (var setting in settings)
             {
                 CapabilityId id;
@@ -601,8 +614,12 @@ namespace Sample.WPF
                     continue;
                 var current = src.Capabilities.GetCurrent(id);
                 if (!ValuesMatch(setting, current))
-                    throw new InvalidOperationException(setting.cap + " 读回与请求不符。当前=" + current);
+                {
+                    AppLog.Info("{0} 读回与请求不符。当前={1}", setting.cap, current);
+                    return false;
+                }
             }
+            return true;
         }
 
         static bool ValuesMatch(CapSetting setting, object current)
@@ -1206,6 +1223,7 @@ namespace Sample.WPF
         public string area { get; set; }
         public bool verify { get; set; }
         public bool cropAfterScan { get; set; }
+        public bool? cropMargins { get; set; }
         public bool restoreCanvas { get; set; }
         public bool restoreDriverProfile { get; set; }
         public bool skipIndicators { get; set; }

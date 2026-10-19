@@ -1,15 +1,41 @@
 {
   "id": "huagao-g300",
   "name": "华高 G300",
-  "extends": "default",
+  "extends": "huagao-g100",
   "priority": 20,
   "fallbackSwapDimensions": true,
   "swapPortraitLandscape": true,
   "cropMargins": true,
-  "note": "进纸方向与纸张名相反，所以先对调 A4/A4L、16K/16KL。交换正反面是界面报告里跟着勾选变化的两个私有能力。",
+  "note": "进纸方向与纸张名相反，所以先对调 A4/A4L。驱动界面没有 16开 和 16开横向，16K 与 16KL 都用匹配原始尺寸。交换正反面是界面报告里跟着勾选变化的两个私有能力。",
   "match": { "nameContains": ["G300"] },
+  "papers": {
+    "K16": {
+      "note": "驱动界面没有 16开，按匹配原始尺寸扫描。驱动消黑边打开，保存后不再二次裁边",
+      "area": "settingsOnly",
+      "verify": true,
+      "cropMargins": false,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "匹配原始尺寸" },
+        { "cap": "ICapAutomaticBorderDetection", "value": true },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    },
+    "K16L": {
+      "note": "驱动界面没有 16开横向，按匹配原始尺寸扫描。驱动消黑边打开，保存后不再二次裁边",
+      "area": "settingsOnly",
+      "verify": true,
+      "cropMargins": false,
+      "settings": [
+        { "cap": "CustomBase+2063", "value": "匹配原始尺寸" },
+        { "cap": "ICapAutomaticBorderDetection", "value": true },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapRotation", "value": 0 }
+      ]
+    }
+  },
   "commonAfter": [
-    { "cap": "ICapAutomaticBorderDetection", "value": true, "note": "纸张策略会先关掉消黑边，这里再打开" },
+    { "cap": "ICapAutomaticBorderDetection", "value": true },
     { "cap": "ICapRotation", "value": 0 },
     { "cap": "CustomBase+148", "value": 1, "note": "交换正反面" },
     { "cap": "CustomBase+2074", "value": 1, "note": "交换正反面" }
