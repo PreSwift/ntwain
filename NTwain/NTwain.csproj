@@ -3,6 +3,7 @@
     <PackageId>NTwain</PackageId>
     <Description>Library containing the TWAIN API for dotnet.</Description>
     <TargetFrameworks>net462;net40</TargetFrameworks>
+    <ProjectGuid>{C9F04F6E-EFC4-4A88-97DF-D1AF7FA33641}</ProjectGuid>
     <PackageProjectUrl>https://github.com/soukoku/ntwain</PackageProjectUrl>
     <PackageTags>twain scan</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,6 +24,7 @@
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>Sign.snk</AssemblyOriginatorKeyFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1574;CS0419;NU5048</NoWarn>
     <!--<AssemblyOriginatorKeyFile>..\..\..\release-build\strong-name.snk</AssemblyOriginatorKeyFile>-->
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
