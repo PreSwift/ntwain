@@ -9,18 +9,18 @@ namespace Sample.WPF
     /// <summary>保留机型取景几何；最终旋转角度仅由整页分类器提供。</summary>
     static class ScanImageProcessingHelper
     {
-        public static void PrepareScanGeometry(string path, ScanPaperSize size, bool cropFullArea, bool cropMargins)
+        public static void PrepareScanGeometry(string path, ScanPaperSize size, bool cropFullArea, bool cropMargins, bool cropLandscape = false, float cropWidthMm = 0, float cropHeightMm = 0)
         {
             if (cropFullArea)
             {
-                try { CropFullArea(path, size); }
+                try { CropFullArea(path, size, cropLandscape, cropWidthMm, cropHeightMm); }
                 catch (Exception ex) { AppLog.Info("全幅裁切失败，保留完整图像继续方向分类: {0}", ex.Message); }
             }
             if (cropMargins)
                 TryCropNearWhiteMargins(path, size);
         }
 
-        static void CropFullArea(string path, ScanPaperSize size)
+        static void CropFullArea(string path, ScanPaperSize size, bool landscape, float cropWidthMm, float cropHeightMm)
         {
             var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
@@ -28,8 +28,10 @@ namespace Sample.WPF
                 using (var image = new Bitmap(path))
                 {
                     var dims = size.GetDimensionsMm();
-                    int width = (int)Math.Round(Math.Min(dims.WidthMm, dims.HeightMm) / 25.4 * image.HorizontalResolution);
-                    int height = (int)Math.Round(Math.Max(dims.WidthMm, dims.HeightMm) / 25.4 * image.VerticalResolution);
+                    if (cropWidthMm > 0 && cropHeightMm > 0)
+                        dims = new ScanPaperDimensions(cropWidthMm, cropHeightMm);
+                    int width = (int)Math.Round((landscape ? Math.Max(dims.WidthMm, dims.HeightMm) : Math.Min(dims.WidthMm, dims.HeightMm)) / 25.4 * image.HorizontalResolution);
+                    int height = (int)Math.Round((landscape ? Math.Min(dims.WidthMm, dims.HeightMm) : Math.Max(dims.WidthMm, dims.HeightMm)) / 25.4 * image.VerticalResolution);
                     if (width <= 0 || height <= 0 || image.Width < width || image.Height < height)
                         throw new InvalidDataException("全幅图不足以裁切指定纸张。");
                     using (var page = image.Clone(new Rectangle((image.Width - width) / 2, 0, width, height), image.PixelFormat))

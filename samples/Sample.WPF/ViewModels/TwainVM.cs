@@ -908,7 +908,7 @@ namespace Sample.WPF
                 if (!_captureUsesDriverUi && !_scanApply.UsedDimensionFallback)
                 {
                     ScanImageProcessingHelper.PrepareScanGeometry(
-                        savedPath, _selectedScanPaperSize, _scanApply.CropAfterScan, _scanApply.CropMargins);
+                        savedPath, _selectedScanPaperSize, _scanApply.CropAfterScan, _scanApply.CropMargins, _scanApply.CropLandscape, _scanApply.CropWidthMm, _scanApply.CropHeightMm);
                 }
                 LogSavedImageSize(savedPath);
                 AppLog.Info("扫描图片已保存: {0}", savedPath);

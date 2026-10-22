@@ -12,6 +12,9 @@ namespace Sample.WPF
     {
         public bool UsedDimensionFallback;
         public bool CropAfterScan;
+        public bool CropLandscape;
+        public float CropWidthMm;
+        public float CropHeightMm;
         public bool CropMargins;
         public bool RestoreCanvas;
         public bool RestoredDriverProfile;
@@ -190,6 +193,9 @@ namespace Sample.WPF
             return new ScanApplyResult
             {
                 CropAfterScan = paper != null && paper.cropAfterScan,
+                CropLandscape = paper != null && paper.cropLandscape,
+                CropWidthMm = paper == null ? 0 : paper.cropWidthMm,
+                CropHeightMm = paper == null ? 0 : paper.cropHeightMm,
                 CropMargins = paper != null && paper.cropMargins.HasValue ? paper.cropMargins.Value : CropMargins,
                 RestoreCanvas = paper != null && paper.restoreCanvas
             };
@@ -1223,9 +1229,13 @@ namespace Sample.WPF
         public string area { get; set; }
         public bool verify { get; set; }
         public bool cropAfterScan { get; set; }
+        public bool cropLandscape { get; set; }
+        public float cropWidthMm { get; set; }
+        public float cropHeightMm { get; set; }
         public bool? cropMargins { get; set; }
         public bool restoreCanvas { get; set; }
         public bool restoreDriverProfile { get; set; }
+        public bool useRestoredSettingsOnly { get; set; }
         public bool skipIndicators { get; set; }
         public string usePaper { get; set; }
         public string forceOrientation { get; set; }
