@@ -1,0 +1,123 @@
+{
+  "id": "epson-l15160",
+  "name": "爱普生 L15160",
+  "extends": "default",
+  "priority": 20,
+  "fallbackSwapDimensions": true,
+  "note": "不要把单位改成厘米再写扫描框。A4 和 16K 长边先进，整幅采集后按横向区域裁切；A4L 和 16KL 短边先进，整幅采集后按竖向区域裁切。",
+  "match": {
+    "manufacturerContains": ["EPSON", "爱普生"],
+    "nameContains": ["L15160"]
+  },
+  "commonAfter": [
+    { "cap": "ICapAutomaticColorEnabled", "value": false },
+    { "cap": "ICapPixelType", "value": "Gray", "required": true }
+  ],
+  "papers": {
+    "A3": {
+      "note": "297mm 短边先进：直接请求 297x420mm 扫描区域，避免全幅裁切造成背面偏移。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "cropLandscape": false,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches", "required": true },
+        { "cap": "ICapSupportedSizes", "value": "A3", "required": true },
+        { "cap": "ICapOrientation", "value": "Rot0", "required": true },
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapRotation", "value": 0 },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 16.535433, "unit": "inch", "target": "ICapFrames" }
+    },
+    "K8": {
+      "cropWidthMm": 270,
+      "cropHeightMm": 390,
+      "note": "270mm 短边先进：直接请求 270x390mm 扫描区域，避免全幅裁切造成偏移。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "cropLandscape": false,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches", "required": true },
+        { "cap": "ICapSupportedSizes", "value": "A3", "required": true },
+        { "cap": "ICapOrientation", "value": "Rot0", "required": true },
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapRotation", "value": 0 },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 10.629921, "bottom": 15.354331, "unit": "inch", "target": "ICapFrames" }
+    },
+    "A4": {
+      "note": "297mm 长边先进：使用 ShowUI 实测 A4 扫描框，直接采集正反面。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "cropLandscape": true,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches", "required": true },
+        { "cap": "ICapSupportedSizes", "value": "A4", "required": true },
+        { "cap": "ICapOrientation", "value": "Rot0", "required": true },
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapRotation", "value": 0 },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 11.69, "bottom": 8.27, "unit": "inch", "target": "ICapFrames" }
+    },
+    "K16": {
+      "note": "270mm 长边先进：直接请求 270x195mm 横向扫描区域，避免裁掉背面内容。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "cropLandscape": true,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches", "required": true },
+        { "cap": "ICapSupportedSizes", "value": "A4", "required": true },
+        { "cap": "ICapOrientation", "value": "Rot0", "required": true },
+        { "cap": "ICapAutomaticRotate", "value": false },
+        { "cap": "ICapRotation", "value": 0 },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 10.629921, "bottom": 7.677165, "unit": "inch", "target": "ICapFrames" }
+    },
+    "A4L": {
+      "note": "短边先进，直接请求 8.27 x 11.69 英寸扫描区域，避免裁掉背面内容。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "skipIndicators": true,
+      "restoreDriverProfile": false,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A4" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 8.27, "bottom": 11.69, "unit": "inch", "target": "ICapFrames" }
+    },
+    "K16L": {
+      "note": "短边先进，直接请求 195 x 270 毫米扫描区域，避免裁掉背面内容。",
+      "area": "fullAreaThenCrop",
+      "cropAfterScan": false,
+      "skipIndicators": true,
+      "settings": [
+        { "cap": "ICapUnits", "value": "Inches" },
+        { "cap": "ICapSupportedSizes", "value": "A4" },
+        { "cap": "ICapOrientation", "value": "Rot0" },
+        { "cap": "ICapAutoSize", "value": "None", "required": true },
+        { "cap": "ICapAutomaticBorderDetection", "value": false, "required": true },
+        { "cap": "ICapUndefinedImageSize", "value": false, "required": true }
+      ],
+      "frame": { "left": 0, "top": 0, "right": 7.677165, "bottom": 10.629921, "unit": "inch", "target": "ICapFrames" }
+    }
+  }
+}

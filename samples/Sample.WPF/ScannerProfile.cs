@@ -427,6 +427,14 @@ namespace Sample.WPF
                 case CapabilityId.ICapUnits:
                     SetValueCap(caps.ICapUnits, ParseEnum<Unit>(setting.value), setting, "ICapUnits");
                     break;
+                case CapabilityId.ICapPixelType:
+                    if (setting.required && !caps.ICapPixelType.IsSupported)
+                        throw new InvalidOperationException("ICapPixelType 不支持");
+                    SetValueCap(caps.ICapPixelType, ParseEnum<PixelType>(setting.value), setting, "ICapPixelType");
+                    break;
+                case CapabilityId.ICapAutomaticColorEnabled:
+                    SetBoolCap(caps.ICapAutomaticColorEnabled, setting, "ICapAutomaticColorEnabled");
+                    break;
                 case CapabilityId.ICapXResolution:
                     SetValueCap(caps.ICapXResolution, (TWFix32)(float)AsNumber(setting.value), setting, "ICapXResolution");
                     break;
